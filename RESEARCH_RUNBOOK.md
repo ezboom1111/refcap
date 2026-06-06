@@ -58,6 +58,21 @@ python refledger.py plan $SLUG      # farm_plan.json: 실행할 farm_* 호출 �
 python refledger.py digest $SLUG    # SUMMARY.md
 ```
 
+## 캘리브레이션 — 인사이트 정확도를 *측정*하는 비순환 신호 (Rank-1, 강력 권장)
+cite-or-fail은 "인용이 바이트에 있다"(추적)만 증명하지 "결론이 맞다"(인사이트)는 아니다. 결론 정확도는
+**반증가능한 예측을 *미래 현실*로 채점**해야 잰다 — 모델이 forecast 시점에 못 지어내는 유일한 오라클(자체채점 fixture=Goodhart, LLM-판사=순환과 다름).
+```bash
+# 너가 반증가능한 예측을 할 때(예: "이 사운드는 2주 내 정점", "가격 ≤ X by 날짜") 기록:
+python refledger.py predict $SLUG "<반증가능한 예측>" <신뢰도 0~1> --by <YYYY-MM-DD> --operator <조건> [--anchor <근거 artifact>]
+# 현실이 판가름나면 닫아라 — 가능하면 OBSERVED+앵커된 증거로(자기채점 방지 = hit/miss가 감사가능한 바이트):
+python refledger.py resolve $SLUG <prediction_id> hit|miss|unresolved [--evidence <artifact_id>]
+# 주기적으로 읽어라:
+python refledger.py calib $SLUG   # Brier(낮을수록정확)+5버킷 신뢰도표(gap=|신뢰도-실제적중|)+resolution_rate+Brier(all)vs(anchored)발산
+```
+- 규율: 예측은 **반증가능**하게(애매한 "잘 될 것" 금지). 헤지하면 resolution_rate가 떨어진다 = 그게 드러난다(숨지 않는다).
+- `--evidence`는 그 artifact에 **OBSERVED finding이 있어야** 통과한다. brier_all ≫ brier_anchored 발산 = 무앵커 자기채점 의심 신호.
+- 정직: 이건 *예측-형태* 결론만 잰다(서술적 종합 "이 테마가 지배적"은 못 잼). **N≥20 resolved부터** 의미. 피드백이 가장 느려서 *먼저* 켜라.
+
 ## 경계 (헷갈리면)
 - **코드가 하는 전부**: 타입 dispatch(확장자/스킴), sha256·dedupe(logical key)·tamper, JSONL append/reduce, dangling 거부, 캡처품질 라벨 보존, farm_plan emit. **판단 0.**
 - **네가 하는 전부**: 무슨 데이터·어느 소스·다음에 뭘·비정형 전환 적응·OBSERVED 판정·언제 멈출지·교차일치 의미판단·claim 문장.

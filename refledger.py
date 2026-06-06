@@ -358,6 +358,109 @@ def frontier_state(rdir):
     return {"open": open_, "closed": closed, "visited": visited}
 
 
+# ---- prediction-outcome calibration (Rank-1 of the insight-accuracy R&D) ---------------------------
+# Layer-(3) INSIGHT accuracy (do the CONCLUSIONS match reality) needs a NON-CIRCULAR oracle: a falsifiable
+# forecast scored against a FUTURE real-world outcome the model cannot author at forecast time (unlike a
+# self-graded fixture, which Goodharts, or an LLM-judge, which is circular when judge==researcher). Code
+# only persists the forecast/outcome NOUNS + does arithmetic (Brier, reliability) = no threshold, no content
+# branch, no judge (so it does NOT reintroduce the gyeongju threshold-tree). The AGENT forecasts and
+# adjudicates the outcome (VERBS). Sharpening (adversarial-verify): a resolution may cite an OBSERVED+anchored
+# evidence artifact so the hit/miss is itself auditable BYTES; calib then splits Brier(all) vs Brier(anchored)
+# to surface self-serving unanchored grades.
+_OUTCOMES = {"hit", "miss", "unresolved"}
+
+
+def predict(rdir, claim, confidence, resolve_by, operator="", anchor_artifact_id=""):
+    """Record a FALSIFIABLE forecast. confidence in [0,1] = stated P(claim is true). resolve_by = the date
+    by which reality should settle it. operator = the falsifiable condition (e.g. peaks_within / price_lte /
+    count_gte). anchor_artifact_id (optional) = the basis evidence at forecast time (validated vs the ledger
+    if given). Append-only, no dedupe (a re-forecast is a new prediction)."""
+    try:
+        c = float(confidence)
+    except (TypeError, ValueError):
+        raise ValueError(f"confidence must be a number in [0,1], got {confidence!r}")
+    if not (0.0 <= c <= 1.0):
+        raise ValueError(f"confidence must be in [0,1], got {c}")
+    if anchor_artifact_id:
+        ids = {r["artifact_id"] for r in _read_jsonl(os.path.join(rdir, "ledger.jsonl")) if r.get("kind") == "artifact"}
+        if anchor_artifact_id not in ids:
+            raise ValueError(f"dangling anchor: artifact_id {anchor_artifact_id!r} not in ledger")
+    now = _now()
+    # collision-proof id via urandom (NOT a pre-read filesize, which TOCTOU-races under concurrent predicts).
+    # predictions are append-only with NO dedupe, so the id need not be stable/derived (unlike artifact ids).
+    pid = "p_" + sha256_bytes(f"{claim}|{operator}|{resolve_by}|{now}|{os.urandom(8).hex()}".encode("utf-8"))[:12]
+    row = {"kind": "prediction", "prediction_id": pid, "claim": claim, "stated_confidence": c,
+           "resolve_by": resolve_by, "operator": operator, "anchor_artifact_id": anchor_artifact_id,
+           "created": now}
+    _append_jsonl(os.path.join(rdir, "predictions.jsonl"), row)
+    return row
+
+
+def resolve(rdir, prediction_id, outcome, evidence_artifact=""):
+    """Close a prediction with a real-world OUTCOME (hit/miss/unresolved). Latest resolution per id wins.
+    evidence_artifact (optional) = a registered artifact that an OBSERVED finding anchors to -> makes the
+    hit/miss auditable BYTES, not the agent's bare word (anchored=True). The agent still adjudicates."""
+    if outcome not in _OUTCOMES:
+        raise ValueError(f"outcome must be one of {sorted(_OUTCOMES)}, got {outcome!r}")
+    ppath = os.path.join(rdir, "predictions.jsonl")
+    if prediction_id not in {r["prediction_id"] for r in _read_jsonl(ppath) if r.get("kind") == "prediction"}:
+        raise ValueError(f"unknown prediction_id {prediction_id!r}")
+    anchored = False
+    if evidence_artifact:
+        rows = _read_jsonl(os.path.join(rdir, "ledger.jsonl"))
+        if evidence_artifact not in {r["artifact_id"] for r in rows if r.get("kind") == "artifact"}:
+            raise ValueError(f"evidence artifact {evidence_artifact!r} not in ledger")
+        if not any(r.get("kind") == "finding" and r.get("artifact_id") == evidence_artifact
+                   and r.get("label") == "OBSERVED" for r in rows):
+            raise ValueError(f"evidence artifact {evidence_artifact!r} has no OBSERVED finding to ground the resolution")
+        anchored = True
+    row = {"kind": "resolution", "prediction_id": prediction_id, "outcome": outcome,
+           "evidence_artifact": evidence_artifact, "anchored": anchored, "ts": _now()}
+    _append_jsonl(ppath, row)
+    return row
+
+
+def calibration(rdir):
+    """Reduce predictions.jsonl -> Brier score + 5-bucket reliability table + resolution_rate. REPORTS, never
+    judges (the agent reads it). Non-circular: the oracle is a future outcome the model couldn't author.
+    Honest scope: scores only the falsifiable forecast-shaped slice of insight; descriptive synthesis is not
+    measured here, and it is meaningful only after N>=~20 resolved."""
+    rows = _read_jsonl(os.path.join(rdir, "predictions.jsonl"))
+    preds = {r["prediction_id"]: r for r in rows if r.get("kind") == "prediction"}
+    latest = {}                                  # prediction_id -> latest resolution (append-ordered; last wins)
+    for r in rows:
+        if r.get("kind") == "resolution" and r.get("prediction_id") in preds:
+            latest[r["prediction_id"]] = r
+    resolved = []                                # (p, y, anchored) over hit/miss only
+    for pid, p in preds.items():
+        res = latest.get(pid)
+        if not res or res.get("outcome") not in ("hit", "miss"):
+            continue
+        y = 1.0 if res["outcome"] == "hit" else 0.0
+        resolved.append((float(p.get("stated_confidence", 0.0)), y, bool(res.get("anchored"))))
+
+    def _brier(rs):
+        return round(sum((p - y) ** 2 for p, y, _ in rs) / len(rs), 4) if rs else None
+
+    buckets = []
+    for b in range(5):
+        inb = [r for r in resolved if min(int(r[0] * 5), 4) == b]
+        if inb:
+            mc = sum(r[0] for r in inb) / len(inb)
+            hr = sum(r[1] for r in inb) / len(inb)
+            rng = f"[{b / 5.0:.1f},{(b + 1) / 5.0:.1f}{']' if b == 4 else ')'}"
+            buckets.append({"range": rng, "n": len(inb), "mean_confidence": round(mc, 3),
+                            "hit_rate": round(hr, 3), "gap": round(abs(mc - hr), 3)})
+    ba, banch = _brier(resolved), _brier([r for r in resolved if r[2]])
+    n = len(preds)
+    return {"n_predictions": n, "n_resolved": len(resolved),
+            "resolution_rate": round(len(resolved) / n, 3) if n else 0.0,
+            "brier_all": ba, "brier_anchored": banch,
+            "brier_divergence": (round(ba - banch, 4) if (ba is not None and banch is not None) else None),
+            "reliability_buckets": buckets,
+            "worst_bucket_gap": max((x["gap"] for x in buckets), default=None)}
+
+
 def verify(rdir):
     """Deliberately THIN: local dangling-anchor + tamper(rehash) check + low-quality-citation WARNING.
     NOT the farm gate (which does byte-in-quote semantic grounding). The real seal is the farm bridge."""
@@ -576,11 +679,17 @@ def digest(rdir):
 
 def _resolve(rdir_or_slug):
     """CLI passes the ASCII slug, never the Korean absolute path (Windows mangles Korean subprocess args
-    - the exact seam the red team flagged). Resolve slug -> HERE/research/<slug> internally."""
+    - the exact seam the red team flagged). Resolve slug -> HERE/research/<slug>, CONFINED to the research
+    root so a CLI slug like '../../etc' cannot escape (path-traversal — now exposed via predict/resolve/calib).
+    A genuine absolute path (programmatic caller) passes through unchanged."""
     s = rdir_or_slug
-    if os.path.isabs(s) or os.sep in s or "/" in s:
+    if os.path.isabs(s):
         return s
-    return os.path.join(HERE, "research", s)
+    root = os.path.normpath(os.path.join(HERE, "research"))
+    norm = os.path.normpath(os.path.join(root, s))
+    if norm != root and not norm.startswith(root + os.sep):
+        raise ValueError(f"rdir escapes the research root: {s!r}")
+    return norm
 
 
 def main():
@@ -595,6 +704,11 @@ def main():
     po.add_argument("item", nargs="?", default=""); po.add_argument("--kind", default="question"); po.add_argument("--reason", default="")
     for c in ("verify", "digest", "plan"):
         sub.add_parser(c).add_argument("rdir")
+    pp = sub.add_parser("predict"); pp.add_argument("rdir"); pp.add_argument("claim"); pp.add_argument("confidence")
+    pp.add_argument("--by", required=True, dest="resolve_by"); pp.add_argument("--operator", default=""); pp.add_argument("--anchor", default="")
+    prs = sub.add_parser("resolve"); prs.add_argument("rdir"); prs.add_argument("prediction_id")
+    prs.add_argument("outcome", choices=["hit", "miss", "unresolved"]); prs.add_argument("--evidence", default="")
+    sub.add_parser("calib").add_argument("rdir")
     a = ap.parse_args()
     if a.cmd == "open":
         print(os.path.basename(open_research(a.goal)))   # print the ASCII slug, not the Korean path
@@ -621,6 +735,12 @@ def main():
         print(digest(rd))
     elif a.cmd == "plan":
         print(json.dumps(farm_plan(rd), ensure_ascii=False))
+    elif a.cmd == "predict":
+        print(json.dumps(predict(rd, a.claim, a.confidence, a.resolve_by, a.operator, a.anchor), ensure_ascii=False))
+    elif a.cmd == "resolve":
+        print(json.dumps(resolve(rd, a.prediction_id, a.outcome, a.evidence), ensure_ascii=False))
+    elif a.cmd == "calib":
+        print(json.dumps(calibration(rd), ensure_ascii=False))
 
 
 if __name__ == "__main__":
