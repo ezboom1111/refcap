@@ -1,0 +1,29 @@
+# ── refcap .gitignore ──
+# Raw media + per-investigation scratch (don't-hoard: keep extracts+hashes, not raw bytes)
+refs/*
+!refs/_acc_records/
+dl/
+research/
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Runtime locks
+.ledger.lock
+**/.ledger.lock
+
+# Secrets (NEVER commit — keys live in env/registry, not files)
+.env
+.env.*
+*.key
+*.pem
+credentials*
+secrets*
+
+# Node
+node_modules/
+
+# OS
+Thumbs.db
+.DS_Store

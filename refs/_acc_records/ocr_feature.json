@@ -1,0 +1,11 @@
+{
+  "feature": "refocr.py - OCR on-screen text -> dynamic whisper initial_prompt (file-based path)",
+  "cod_news_baseline_vs_primed": {"baseline_agree": 90.1, "ocr_primed_agree": 95.2, "delta": 5.1,
+    "mechanism": "recovered ASR-dropped on-screen dialogue block + 케이팝->K-POP", "loanword_logo_fixed": false,
+    "note": "stylized logo 콜오브듀티 garbled by easyocr to XtC -> 듀티/뉴티 NOT fixed (honest limit)"},
+  "tshirt_regression": {"baseline_agree": 95.9, "ocr_primed_agree": 95.4, "delta": -0.5, "verdict": "neutral (within noise)"},
+  "e2e_refextract": {"ocr_lines": 7, "hint_chars": 96, "transcript_segments": 13, "gate": "OK", "status": "PASS"},
+  "robustness_bugs_fixed": ["best-of-2 held 2 whisper models -> OOM -> transcribe_once del+gc",
+    "Windows Korean abs-path subprocess arg mangled -> cwd-relative + file output",
+    "easyocr+whisper memory -> OCR subprocess isolation"]
+}

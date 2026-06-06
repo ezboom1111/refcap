@@ -1,0 +1,20 @@
+{
+  "daiso_cosmetic": {
+    "method": "accuracy-best-of-2(medium over large-v3: cov 0.999 vs 0.0)",
+    "picked_model": "medium",
+    "gate": "OK",
+    "coverage": 0.999,
+    "chars": 290,
+    "google_chars": 284,
+    "agreement_vs_google": 86.8
+  },
+  "chanel": {
+    "method": "accuracy-best-of-2(large-v3 over medium: cov 0.999 vs 0.999)",
+    "picked_model": "large-v3",
+    "gate": "OK",
+    "coverage": 0.999,
+    "chars": 224,
+    "google_chars": 227,
+    "agreement_vs_google": 94.7
+  }
+}

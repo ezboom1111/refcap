@@ -1,0 +1,9 @@
+{
+  "manifest_version": 3,
+  "name": "refcap tab recorder",
+  "version": "0.1.0",
+  "description": "Record the active tab's audio+video to a local .webm for personal reference analysis (refcap). No upload, no network.",
+  "permissions": ["tabCapture", "offscreen"],
+  "background": { "service_worker": "background.js" },
+  "action": { "default_title": "refcap: click to start / stop recording this tab" }
+}

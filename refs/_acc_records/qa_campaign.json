@@ -1,0 +1,16 @@
+{
+  "R1_generality_9clips": {"ge90_crossvendor": "7/9", "note": "asmr93.1 cod90.1 jp94.6 lotte92.3 burger95.8 workout94.5 dog(gap) wegovy95.6 gyeongju(degen-FP-fixed)"},
+  "bugs_found_and_fixed": [
+    "degeneracy false-positive on list/countdown content (gyeongju 736-char coherent flagged DEGENERATE via local 하기도x7 loop) -> threshold raised to dominant-loop only; gate now OK",
+    "news-outro hallucination 지금까지 뉴스 스토리였습니다 (dog_dad) -> boilerplate; + deloop output polish"
+  ],
+  "R2_levers_on_daiso_extreme_slang": {"baseline_bestof2": 86.8, "slang_prompt": 87.1, "demucs_first": 85.7, "self_consistency": 50.9, "verdict": "no lever helps cross-vendor"},
+  "R3_human_GT_adjudication": {
+    "lotteworld": {"crossvendor": 92.3, "true_acc": 95, "winner": "whisper"},
+    "gyeongju":   {"crossvendor": 85.9, "true_acc": 90, "winner": "whisper"},
+    "daiso":      {"crossvendor": 86.8, "true_acc": 90, "winner": "whisper", "note": "extreme-slang STILL 90% true; cross-vendor under-counted (Google erred more)"},
+    "cod_news":   {"crossvendor": 90.1, "true_acc": 94, "winner": "google", "note": "ONLY clip whisper lost: loanword title 듀티->뉴티 + dropped dialogue block"}
+  },
+  "remaining_real_weakness": "foreign/loanword proper nouns (Call of Duty 듀티->뉴티) + occasional dialogue-segment drop on broadcast content",
+  "overinvestment_verdict": "NO for bug-fixes + accuracy-verification (true acc revised UP to >=90% even on slang); the loanword-glossary fix is the one measured next target"
+}
