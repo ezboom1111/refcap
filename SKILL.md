@@ -27,6 +27,14 @@ contract; the runbook is the procedure.
 - **ISN'T**: a brain, a memory system, a skill-learning loop, or an orchestration engine. Those are the
   host's (Claude Code / hermes). Do not reimplement them — you will lose to 18-months-ahead incumbents.
 
+## Boundary with youtube-research (분담 — overlap 금지)
+This is the **HEAVY path** (local whisper ASR, audio-separation, OCR, frame sampling + a resumable
+ledger). The **LIGHT path** is the `youtube-research` skill (caption-available YouTube, free APIs,
+**no download / no ASR**). Routing:
+- captions exist / YouTube / cheap trend numbers → **`youtube-research` first** (cheaper, clearly lawful).
+- no captions / foreign VO / off-YouTube (TikTok·IG) / deep multi-source → **this skill**.
+Exactly **one** skill per source; both seal load-bearing claims through the **same** farm cite-or-fail gate.
+
 ## The one-line philosophy
 Code persists **nouns** (artifact, finding, frontier-entry) and judges only whether evidence is real
 (exists + unchanged + capture-quality-labeled). You perform **verbs** (choose, ask, stop, adapt).
