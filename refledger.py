@@ -303,17 +303,23 @@ def ledger_append(rdir, **row):
         return art
 
 
-def record_finding(rdir, text, label, artifact_id, quote="", locator="", confidence="med"):
+def record_finding(rdir, text, label, artifact_id, quote="", locator="", confidence="med", corroborated_by=None):
     """Local cite-or-fail: a finding MUST anchor to a registered artifact, else refuse.
     `quote` = the VERBATIM span from the artifact that grounds the claim (NOT the claim text - the farm
     gate rejects a claim whose anchor text is not literally in the cited bytes; learned e2e). `locator` =
-    where (cue=N | char=a..b | frame=<file>) for cue/frame anchors that need no quote."""
+    where (cue=N | char=a..b | frame=<file>) for cue/frame anchors that need no quote. `corroborated_by` =
+    artifact_ids this finding claims to be CORROBORATED by (Rank-3: verify mechanically checks their sources
+    span >=2 distinct hosts, so a same-domain '2 sources' fake-independence is surfaced)."""
     path = os.path.join(rdir, "ledger.jsonl")
     ids = {r["artifact_id"] for r in _read_jsonl(path) if r.get("kind") == "artifact"}
     if artifact_id not in ids:
         raise ValueError(f"dangling anchor: artifact_id {artifact_id!r} not in ledger")
+    cb = list(corroborated_by or [])
+    for aid in cb:
+        if aid not in ids:
+            raise ValueError(f"dangling corroboration: artifact_id {aid!r} not in ledger")
     f = {"kind": "finding", "artifact_id": artifact_id, "text": text, "label": label,
-         "quote": quote, "locator": locator, "confidence": confidence, "ts": _now()}
+         "quote": quote, "locator": locator, "confidence": confidence, "corroborated_by": cb, "ts": _now()}
     _append_jsonl(path, f)
     return f
 
@@ -461,6 +467,89 @@ def calibration(rdir):
             "worst_bucket_gap": max((x["gap"] for x in buckets), default=None)}
 
 
+# ---- layer-1/3 advisory analysis (Rank 2/3 of the insight-accuracy R&D) ----------------------------
+def _levenshtein(a, b):
+    if len(a) < len(b):
+        a, b = b, a
+    prev = list(range(len(b) + 1))
+    for i, ca in enumerate(a, 1):
+        cur = [i]
+        for j, cb in enumerate(b, 1):
+            cur.append(min(prev[j] + 1, cur[-1] + 1, prev[j - 1] + (ca != cb)))
+        prev = cur
+    return prev[-1]
+
+
+def _cer(hyp, ref):
+    ref = ref or ""
+    return round(_levenshtein(hyp or "", ref) / len(ref), 4) if ref else 0.0
+
+
+def measure_capture_error(rdir, artifact_id, hyp_span, truth_span):
+    """Rank-2: put a NUMBER on layer-1 capture fidelity = CER(machine span vs a short HUMAN-keyed truth span).
+    cite-or-fail proves a quote EXISTS in bytes; this measures whether the bytes are CORRECT - the open roof
+    cite-or-fail provably cannot touch. Code computes+appends the number; the AGENT (runbook) decides if it is
+    material and caps the finding to INFERRED (NO hardcoded ceiling = no threshold-tree). CER only (char-level;
+    word segmentation is language-specific)."""
+    if not (truth_span or "").strip():
+        raise ValueError("truth_span must be non-empty; CER is undefined without a human reference")
+    ids = {r["artifact_id"] for r in _read_jsonl(os.path.join(rdir, "ledger.jsonl")) if r.get("kind") == "artifact"}
+    if artifact_id not in ids:
+        raise ValueError(f"unknown artifact_id {artifact_id!r}")
+    row = {"kind": "capture_measure", "artifact_id": artifact_id, "cer": _cer(hyp_span, truth_span), "ts": _now()}
+    _append_jsonl(os.path.join(rdir, "ledger.jsonl"), row)
+    return row
+
+
+_MULTI_SUFFIX = {"co.kr", "or.kr", "ne.kr", "go.kr", "re.kr", "pe.kr", "co.uk", "org.uk", "ac.uk",
+                 "co.jp", "ne.jp", "or.jp", "go.jp", "com.au", "com.cn", "com.br", "co.in", "co.nz"}
+
+
+def _host(url):
+    """Registrable domain (eTLD+1), www-stripped, with a small frozen multi-label-suffix table so a subdomain
+    (news.naver.com) reduces to its org (naver.com) and a same-org 'corroboration' is caught. NOT a full Public
+    Suffix List (not stdlib); covers the suffixes that matter for KR/EN research (subdomain fake-independence)."""
+    h = (urllib.parse.urlparse(str(url)).hostname or "").lower()
+    if h.startswith("www."):
+        h = h[4:]
+    parts = h.split(".")
+    if len(parts) <= 2:
+        return h
+    return ".".join(parts[-3:]) if ".".join(parts[-2:]) in _MULTI_SUFFIX else ".".join(parts[-2:])
+
+
+_NUM_RE = re.compile(r"\d+(?:,\d{3})*(?:\.\d+)?")   # comma only as a thousands group (so '1,2,3' = three numbers)
+_CJK_STOP = {"입니다", "이다", "한다", "합니다", "됩니다", "있다", "없다", "에서", "에게", "으로", "이고",
+             "이며", "하는", "했다", "된다", "이라", "라고", "까지", "부터", "처럼", "보다", "예요", "에요",
+             "이에요", "그리고", "하지만", "그러나", "또는", "이런", "저런", "그런"}
+
+
+def _numeric_conflicts(finds):
+    """Rank-3 (narrow, ADVISORY): two findings that share an entity-ish word AND whose number sets differ.
+    Surfaces a candidate contradiction for the agent (rule 4); it NEVER adjudicates which value is right, and
+    is kept narrow (shared entity token + differing numbers) to avoid the cry-wolf nag the threshold-tree died of."""
+    def toks(f):
+        s = f.get("quote") or ""        # the VERBATIM bytes only (not the agent's claim text, which can share
+        nums = {n.replace(",", "") for n in _NUM_RE.findall(s)}   # a category label and false-flag distinct metrics)
+        words = set()
+        for w in re.findall(r"[^\W\d_]{2,}", s, re.UNICODE):
+            wl = w.lower()
+            if wl in _CJK_STOP:
+                continue                            # skip KR copulas/particles (입니다/에서/...) = cry-wolf source
+            if not wl.isascii() or len(wl) >= 4:    # CJK 2+ char = content token; ASCII needs 4+ (skip is/of/the)
+                words.add(wl)
+        return nums, words
+    items = [(f, *toks(f)) for f in finds]
+    out = []
+    for i in range(len(items)):
+        fi, ni, wi = items[i]
+        for j in range(i + 1, len(items)):
+            fj, nj, wj = items[j]
+            if ni and nj and ni != nj and (wi & wj):
+                out.append({"a": fi["artifact_id"], "b": fj["artifact_id"], "numbers": sorted(ni | nj)})
+    return out
+
+
 def verify(rdir):
     """Deliberately THIN: local dangling-anchor + tamper(rehash) check + low-quality-citation WARNING.
     NOT the farm gate (which does byte-in-quote semantic grounding). The real seal is the farm bridge."""
@@ -479,8 +568,24 @@ def verify(rdir):
             mismatch.append(a["artifact_id"])
     low_q = [f["artifact_id"] for f in finds
              if arts.get(f["artifact_id"], {}).get("quality_label") in BAD_QUALITY]
+    # --- advisory surfacers (Rank 2/3/5): REPORT, never adjudicate (ok stays = dangling/mismatch/unverifiable) ---
+    cmeas = {}
+    for r in rows:
+        if r.get("kind") == "capture_measure":
+            cmeas[r["artifact_id"]] = r.get("cer")                    # latest wins (append-ordered)
+    capture_errors = {f["artifact_id"]: cmeas[f["artifact_id"]] for f in finds if f["artifact_id"] in cmeas}
+    fake_corrob = []                                                  # rule 5: 'corroborated' but sources share a host
+    for f in finds:
+        cb = f.get("corroborated_by") or []
+        if cb:
+            hosts = {_host(arts.get(aid, {}).get("source", "")) for aid in [f["artifact_id"], *cb]}
+            hosts.discard("")
+            if len(hosts) < 2:
+                fake_corrob.append(f["artifact_id"])
     return {"ok": not dangling and not mismatch and not unverifiable, "dangling_anchors": dangling,
-            "hash_mismatch": mismatch, "unverifiable": unverifiable, "low_quality_citations": low_q}
+            "hash_mismatch": mismatch, "unverifiable": unverifiable, "low_quality_citations": low_q,
+            "capture_errors": capture_errors, "fake_corroboration": list(dict.fromkeys(fake_corrob)),
+            "numeric_conflicts": _numeric_conflicts(finds), "open_at_stop": frontier_state(rdir)["open"]}
 
 
 def farm_plan(rdir):
@@ -699,7 +804,7 @@ def main():
     pi = sub.add_parser("ingest"); pi.add_argument("rdir"); pi.add_argument("target"); pi.add_argument("--note", default="")
     pf = sub.add_parser("finding"); pf.add_argument("rdir"); pf.add_argument("text"); pf.add_argument("label")
     pf.add_argument("artifact_id"); pf.add_argument("--quote", default=""); pf.add_argument("--locator", default="")
-    pf.add_argument("--confidence", default="med")
+    pf.add_argument("--confidence", default="med"); pf.add_argument("--corroborated", nargs="*", default=[])
     po = sub.add_parser("frontier"); po.add_argument("rdir"); po.add_argument("op", choices=["open", "close", "note", "visit", "state"])
     po.add_argument("item", nargs="?", default=""); po.add_argument("--kind", default="question"); po.add_argument("--reason", default="")
     for c in ("verify", "digest", "plan"):
@@ -709,6 +814,8 @@ def main():
     prs = sub.add_parser("resolve"); prs.add_argument("rdir"); prs.add_argument("prediction_id")
     prs.add_argument("outcome", choices=["hit", "miss", "unresolved"]); prs.add_argument("--evidence", default="")
     sub.add_parser("calib").add_argument("rdir")
+    pm = sub.add_parser("measure"); pm.add_argument("rdir"); pm.add_argument("artifact_id")
+    pm.add_argument("hyp_span"); pm.add_argument("truth_span")
     a = ap.parse_args()
     if a.cmd == "open":
         print(os.path.basename(open_research(a.goal)))   # print the ASCII slug, not the Korean path
@@ -717,7 +824,7 @@ def main():
     if a.cmd == "ingest":
         print(json.dumps(ingest(rd, a.target, a.note), ensure_ascii=False))
     elif a.cmd == "finding":
-        print(json.dumps(record_finding(rd, a.text, a.label, a.artifact_id, a.quote, a.locator, a.confidence), ensure_ascii=False))
+        print(json.dumps(record_finding(rd, a.text, a.label, a.artifact_id, a.quote, a.locator, a.confidence, a.corroborated), ensure_ascii=False))
     elif a.cmd == "frontier":
         if a.op == "state":
             print(json.dumps(frontier_state(rd), ensure_ascii=False))
@@ -741,6 +848,8 @@ def main():
         print(json.dumps(resolve(rd, a.prediction_id, a.outcome, a.evidence), ensure_ascii=False))
     elif a.cmd == "calib":
         print(json.dumps(calibration(rd), ensure_ascii=False))
+    elif a.cmd == "measure":
+        print(json.dumps(measure_capture_error(rd, a.artifact_id, a.hyp_span, a.truth_span), ensure_ascii=False))
 
 
 if __name__ == "__main__":

@@ -73,6 +73,15 @@ python refledger.py calib $SLUG   # Brier(낮을수록정확)+5버킷 신뢰도�
 - `--evidence`는 그 artifact에 **OBSERVED finding이 있어야** 통과한다. brier_all ≫ brier_anchored 발산 = 무앵커 자기채점 의심 신호.
 - 정직: 이건 *예측-형태* 결론만 잰다(서술적 종합 "이 테마가 지배적"은 못 잼). **N≥20 resolved부터** 의미. 피드백이 가장 느려서 *먼저* 켜라.
 
+## 측정 보조 도구 — 캡처천장·교차검증·누락 (Rank 2/3/5)
+- **캡처 정확도 측정**(Rank2): 외국어/노이즈 등 의심 캡처는 20초쯤 *직접 받아쓰고* CER를 박아라:
+  `python refledger.py measure $SLUG <artifact_id> "<기계 전사 span>" "<네가 받아쓴 진실 span>"`
+  → verify의 `capture_errors`에 뜬다. CER가 *이 주장에 유의미*하면 finding을 INFERRED로 격하(임계값은 코드가 아니라 너의 판단 = 두뇌-인-코드 금지).
+- **가짜 교차검증 차단**(Rank3): "2 소스 일치"를 주장하려면 finding에 `--corroborated <다른 artifact_id ...>`를 달아라.
+  verify가 *그 출처들의 hostname이 실제로 다른지* 기계적으로 확인 → 같으면 `fake_corroboration`에 뜬다(같은 도메인 2개=가짜독립).
+- **모순 후보**(Rank3): verify의 `numeric_conflicts`는 *같은 대상어를 공유하는데 숫자가 다른* finding 쌍을 띄운다(어드바이저리). 어느 쪽이 맞는지는 *네가* 정하고 frontier_note로 플래그(코드는 판정 안 함).
+- **누락 점검**(Rank5): 멈추기 전, *안 본 소스 클래스*(공식사이트·반대후기·비한국어·1차문헌)를 frontier_open하고 각각 finding 또는 "declined-because" reason으로 close하라. verify의 `open_at_stop`이 *디제스트 시점에 안 닫힌 것*을 보여준다 = 0에 수렴시켜라. 단일 소스에 흔들리는 결론(LOO 취약)은 독립 도메인으로 교차확인 후 멈춰라.
+
 ## 경계 (헷갈리면)
 - **코드가 하는 전부**: 타입 dispatch(확장자/스킴), sha256·dedupe(logical key)·tamper, JSONL append/reduce, dangling 거부, 캡처품질 라벨 보존, farm_plan emit. **판단 0.**
 - **네가 하는 전부**: 무슨 데이터·어느 소스·다음에 뭘·비정형 전환 적응·OBSERVED 판정·언제 멈출지·교차일치 의미판단·claim 문장.
