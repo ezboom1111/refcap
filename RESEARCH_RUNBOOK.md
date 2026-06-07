@@ -103,6 +103,15 @@ python refledger.py grade $SLUG C1 $STD
 - **eff_n=중복-바닥**: 같은 호스트/보도자료 복사본은 1개로 붕괴(distinct_hosts vs effective_sources 차=syndication_suspected). "3개 가져왔다"가 아니라 "*독립* 3개"가 멈춤조건.
 - **두뇌-인-코드 경계**: 루프를 *도는 것*(다음에 뭘 ingest, 언제 포기)은 네 판단(VERB). 코드는 *게이지*(grade)와 *부족분*만 준다. min-N을 코드가 강제하지 않는다 = 네가 선언.
 
+## 언제·얼마나 grade 하나 — 비례적·선택적 (평가표를 *의례*로 만들지 마라)
+Rank-6는 *스칼펠이지 의무가 아니다*. 모든 finding에 평가표를 무차별로 들이대면 마찰만 늘고(느림·헛수고·약한 소스 padding=Goodhart·false SHORTFALL) **오히려 나빠진다**. 안 켜면 예전(vibe)과 동일하게 빠르다 — 켜는 건 *판돈이 클 때*다. 규율(학계도 이렇게 한다 — GRADE/PRISMA는 *핵심 결과*만 등급매기지 모든 문장이 아니다):
+1. **load-bearing 소수만 grade** (결정이 걸린 핵심 결론 2~5개만 conclusion_id로 묶어 채점). 맥락·곁가지는 vibe로 빠르게 (= farm 게이트의 "현미경이지 dragnet 아님"과 동일).
+2. **바는 stakes에 비례.** 정설/공식 1차출처 한 줄이면 가벼운 바(또는 grade 안 함). 결정적 숫자면 strict(독립 3+·[필요시]최신·무충돌). *academic 루브릭을 캐주얼 조회에 들이대지 마라* = 그게 "더 제한해서 별로"가 되는 길.
+3. **SHORTFALL은 *신호*지 *강제 정지*가 아니다.** MEETS까지 꼭 돌 필요 없다 — "소스 2개로, 원한 3개는 아님"을 *정직히 공개*하고 출하하는 것도 유효한 결과. grade는 *간극을 보이게* 할 뿐 더 일하라고 *강제*하지 않는다 (**grade ≠ gate**; verify `ok` 불변).
+4. **기본은 안 grade.** cite-or-fail·품질라벨·numeric_conflicts로 충분한 게 대부분. "이게 *충분히 뒷받침됐나*"가 *실제로 중요할 때만* 평가표를 켠다.
+5. **Goodhart 경계.** SHORTFALL을 약하거나 중복인 소스로 메우지 마라 — grade가 잡는다(eff_n 붕괴 · waste=raw/eff_n · syndication_suspected). 채우려면 *질 좋은 독립* 소스로.
+> 요지: 평가표는 능력을 *제한*하는 게 아니라, *판돈 큰 소수*에 한해 "vibe → 읽는 등급"으로 *보이게* 한다. 무차별 적용은 금지 — 그게 유일하게 "나빠지는" 경로다.
+
 ## 경계 (헷갈리면)
 - **코드가 하는 전부**: 타입 dispatch(확장자/스킴), sha256·dedupe(logical key)·tamper, JSONL append/reduce, dangling 거부, 캡처품질 라벨 보존, farm_plan emit. **판단 0.**
 - **네가 하는 전부**: 무슨 데이터·어느 소스·다음에 뭘·비정형 전환 적응·OBSERVED 판정·언제 멈출지·교차일치 의미판단·claim 문장.
