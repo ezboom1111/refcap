@@ -64,6 +64,12 @@ class TestWebQuality(unittest.TestCase):
     def test_bot_wall(self):
         self.assertEqual(R.web_quality("Checking your browser before accessing. Cloudflare. captcha"), "BOT_WALL")
 
+    def test_js_wall_distinct_from_bot_wall(self):   # JS shell -> escalate to browser render (login-free), NOT a bot challenge
+        self.assertEqual(R.web_quality("<div id='root'></div> You need to enable JavaScript to run this app."), "JS_WALL")
+        self.assertEqual(R.web_quality("Checking your browser before accessing. Cloudflare. captcha"), "BOT_WALL")  # bot unchanged
+        rich = "<p>" + ("실제 본문 문장. " * 220) + " enable javascript</p>"   # marker word but content-rich
+        self.assertEqual(R.web_quality(rich), "OK")                          # sparsity guard: not flagged
+
     def test_rich_page_with_passing_marker_is_OK(self):
         # REGRESSION (caught live): a 1.2MB Wikipedia article that MENTIONS 'captcha' once is NOT a bot wall.
         # Same lesson as the gyeongju degeneracy false-positive: a local marker in a big doc != failure.
@@ -83,7 +89,7 @@ class TestWebQuality(unittest.TestCase):
         self.assertEqual(R.web_quality(rich), "OK")                                  # not flagged (has real content)
 
     def test_bad_quality_set_includes_web_failures(self):
-        for lbl in ("BOT_WALL", "LOGIN_WALL", "PAYWALL", "EMPTY", "HTTP_ERROR"):
+        for lbl in ("BOT_WALL", "JS_WALL", "LOGIN_WALL", "PAYWALL", "EMPTY", "HTTP_ERROR"):
             self.assertIn(lbl, R.BAD_QUALITY)                                        # -> verify warns on citation
 
 

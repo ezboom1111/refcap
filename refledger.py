@@ -22,10 +22,12 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 # audio side comes from refrecord.coverage_gate; web side from web_quality() below. Both label a MEASURED
 # capture FAILURE (no-speech / bot-wall / empty), NOT a content-type judgement (that stays the agent's).
 BAD_QUALITY = {"NO_SPEECH_OR_MASKED", "SILENT", "COVERAGE_GAP", "LOW_CONFIDENCE", "DEGENERATE",
-               "BOT_WALL", "LOGIN_WALL", "PAYWALL", "EMPTY", "HTTP_ERROR",
+               "BOT_WALL", "JS_WALL", "LOGIN_WALL", "PAYWALL", "EMPTY", "HTTP_ERROR",
                "API_ERROR", "MALFORMED", "EXTRACT_FAILED"}
 _BOT_MARKERS = ("captcha", "cloudflare", "unusual traffic", "are you a robot", "verify you are human",
-                "enable javascript", "checking your browser", "automated requests")
+                "checking your browser", "automated requests")   # genuine bot challenge -> do NOT bypass (ToS)
+_JS_MARKERS = ("enable javascript", "javascript is required", "requires javascript",   # SPA shell -> ESCALATE to a
+               "javascript to run this app")   # browser render (login-free, ToS-clean, recoverable); NOT a bot wall
 _LOGIN_MARKERS = ("sign in to continue", "log in to view", "please log in", "members only",
                   "로그인 후", "로그인이 필요", "login required")
 _PAYWALL_MARKERS = ("subscribe to read", "subscribers only", "for subscribers", "유료 회원", "구독해야")
@@ -190,6 +192,8 @@ def web_quality(text, http_status=None, min_chars=200, wall_chars=1500):
     # sparse: a wall / empty page. classify by failure signature.
     if any(m in low for m in _BOT_MARKERS):
         return "BOT_WALL"
+    if any(m in low for m in _JS_MARKERS):
+        return "JS_WALL"          # sparse SPA shell -> escalate to a browser render (login-free); distinct from a bot challenge
     if any(m in low for m in _LOGIN_MARKERS):
         return "LOGIN_WALL"
     if any(m in low for m in _PAYWALL_MARKERS):
