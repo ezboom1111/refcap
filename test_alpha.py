@@ -56,6 +56,16 @@ class AlphaLayer(unittest.TestCase):
         p = R.predict(self.r, "lab X grads place into 한수원 >50%", 0.7, "2027-06-01", hypothesis_id=h)
         self.assertEqual(p["hypothesis_id"], h)
 
+    def test_digest_surfaces_alpha_and_predictions(self):   # alpha layer must be VISIBLE in the digest, not siloed
+        h = R.set_hypothesis(self.r, "thesis Z is a hidden powerhouse")["hypothesis_id"]
+        a = self._art("https://x.com/1")
+        R.record_finding(self.r, "sig", "OBSERVED", a["artifact_id"], quote="q", hypothesis_id=h, polarity="confirms")
+        R.predict(self.r, "X will happen by 2027", 0.6, "2027-01-01", hypothesis_id=h)
+        txt = open(R.digest(self.r), encoding="utf-8").read()
+        self.assertIn("알파 가설", txt)          # Rank-7 surfaced
+        self.assertIn("예측", txt)               # predictions surfaced
+        self.assertIn("thesis Z", txt)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

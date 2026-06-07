@@ -1111,6 +1111,19 @@ def digest(rdir):
     L.append(f"\n## findings (OBSERVED first)")
     for f in sorted(finds, key=lambda x: x["label"]):
         L.append(f"- ({f['label']}) {f['text']}  <-{f['artifact_id']}@{f.get('locator')}")
+    hyps = [r for r in rows if r.get("kind") == "hypothesis"]
+    if hyps:                                                  # Rank-7 alpha layer: thesis + weak-signal triangulation
+        L.append(f"\n## 알파 가설 + 삼각측량 ({len(hyps)})")
+        for h in hyps:
+            t = triangulate(rdir, h["hypothesis_id"])
+            L.append(f"- {h['thesis'][:90]}  [confirm {t['confirming']}(독립호스트 {t['independent_confirming_hosts']}, "
+                     f"modality {len(t['confirming_modalities'])}) / disconfirm {t['disconfirming']} / net {t['net_independent']}]")
+    pr = [r for r in _read_jsonl(os.path.join(rdir, "predictions.jsonl")) if r.get("kind") == "prediction"]
+    if pr:
+        cal = calibration(rdir)
+        L.append(f"\n## 예측 ({len(pr)} 등록 / resolved {cal['n_resolved']} / premature {cal['n_premature']} / brier {cal['brier_all']})")
+        for p in pr:
+            L.append(f"- (conf {p.get('stated_confidence')}, by {p.get('resolve_by')}) {p.get('claim', '')[:100]}")
     L.append(f"\n## 남은 frontier ({len(st['open'])})")
     for o in st["open"]:
         L.append(f"- [ ] {o}")
@@ -1143,13 +1156,14 @@ def main():
     pf = sub.add_parser("finding"); pf.add_argument("rdir"); pf.add_argument("text"); pf.add_argument("label")
     pf.add_argument("artifact_id"); pf.add_argument("--quote", default=""); pf.add_argument("--locator", default="")
     pf.add_argument("--confidence", default="med"); pf.add_argument("--corroborated", nargs="*", default=[])
-    pf.add_argument("--conclusion", default="")
+    pf.add_argument("--conclusion", default=""); pf.add_argument("--hypothesis", default=""); pf.add_argument("--polarity", default="")
     po = sub.add_parser("frontier"); po.add_argument("rdir"); po.add_argument("op", choices=["open", "close", "note", "visit", "state"])
     po.add_argument("item", nargs="?", default=""); po.add_argument("--kind", default="question"); po.add_argument("--reason", default="")
     for c in ("verify", "digest", "plan"):
         sub.add_parser(c).add_argument("rdir")
     pp = sub.add_parser("predict"); pp.add_argument("rdir"); pp.add_argument("claim"); pp.add_argument("confidence")
     pp.add_argument("--by", required=True, dest="resolve_by"); pp.add_argument("--operator", default=""); pp.add_argument("--anchor", default="")
+    pp.add_argument("--conclusion", default=""); pp.add_argument("--hypothesis", default="")
     prs = sub.add_parser("resolve"); prs.add_argument("rdir"); prs.add_argument("prediction_id")
     prs.add_argument("outcome", choices=["hit", "miss", "unresolved"]); prs.add_argument("--evidence", default="")
     sub.add_parser("calib").add_argument("rdir")
@@ -1158,6 +1172,9 @@ def main():
     ppub = sub.add_parser("published"); ppub.add_argument("rdir"); ppub.add_argument("artifact_id"); ppub.add_argument("published_at")
     pstd = sub.add_parser("standard"); pstd.add_argument("rdir"); pstd.add_argument("--knobs", required=True, help="JSON object of declared knobs")
     pgr = sub.add_parser("grade"); pgr.add_argument("rdir"); pgr.add_argument("conclusion_id"); pgr.add_argument("standard_id"); pgr.add_argument("--as-of", default=None, dest="as_of")
+    ph = sub.add_parser("hypothesis"); ph.add_argument("rdir"); ph.add_argument("thesis")   # Rank-7 alpha layer
+    ph.add_argument("--signature", default=""); ph.add_argument("--decay", default="")
+    pt = sub.add_parser("triangulate"); pt.add_argument("rdir"); pt.add_argument("hypothesis_id")
     a = ap.parse_args()
     if a.cmd == "open":
         print(os.path.basename(open_research(a.goal)))   # print the ASCII slug, not the Korean path
@@ -1166,7 +1183,7 @@ def main():
     if a.cmd == "ingest":
         print(json.dumps(ingest(rd, a.target, a.note), ensure_ascii=False))
     elif a.cmd == "finding":
-        print(json.dumps(record_finding(rd, a.text, a.label, a.artifact_id, a.quote, a.locator, a.confidence, a.corroborated, a.conclusion), ensure_ascii=False))
+        print(json.dumps(record_finding(rd, a.text, a.label, a.artifact_id, a.quote, a.locator, a.confidence, a.corroborated, a.conclusion, a.hypothesis, a.polarity), ensure_ascii=False))
     elif a.cmd == "frontier":
         if a.op == "state":
             print(json.dumps(frontier_state(rd), ensure_ascii=False))
@@ -1185,7 +1202,7 @@ def main():
     elif a.cmd == "plan":
         print(json.dumps(farm_plan(rd), ensure_ascii=False))
     elif a.cmd == "predict":
-        print(json.dumps(predict(rd, a.claim, a.confidence, a.resolve_by, a.operator, a.anchor), ensure_ascii=False))
+        print(json.dumps(predict(rd, a.claim, a.confidence, a.resolve_by, a.operator, a.anchor, a.conclusion, a.hypothesis), ensure_ascii=False))
     elif a.cmd == "resolve":
         print(json.dumps(resolve(rd, a.prediction_id, a.outcome, a.evidence), ensure_ascii=False))
     elif a.cmd == "calib":
@@ -1198,6 +1215,10 @@ def main():
         print(json.dumps(set_standard(rd, **json.loads(a.knobs)), ensure_ascii=False))
     elif a.cmd == "grade":
         print(json.dumps(grade_conclusion(rd, a.conclusion_id, a.standard_id, a.as_of), ensure_ascii=False))
+    elif a.cmd == "hypothesis":
+        print(json.dumps(set_hypothesis(rd, a.thesis, a.signature, a.decay), ensure_ascii=False))
+    elif a.cmd == "triangulate":
+        print(json.dumps(triangulate(rd, a.hypothesis_id), ensure_ascii=False))
 
 
 if __name__ == "__main__":
