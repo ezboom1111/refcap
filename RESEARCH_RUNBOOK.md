@@ -85,7 +85,7 @@ python refledger.py calib $SLUG   # Brier(낮을수록정확)+5버킷 신뢰도�
 ## 충분성 루프 — 몇 개면 멈추나 (Rank-6; 1회 패스 아니라 반복)
 리서치는 *1회가 아니다*. 모으고→채점하고→미달이면 *부족분을 채우러 더* 모으고→재채점→**선언한 기준 충족시 멈춘다**. "최소 몇 개?"의 답 = *네가 `set_standard`로 선언한 바*(코드가 정하지 않음 = 두뇌-인-코드 금지).
 ```bash
-# 0) 이 조사의 바 선언(주제별; 코드는 이 숫자를 안 정한다). 예: 시장규모
+# 0) 이 조사의 바 선언 — 의도별 평가표는 EVIDENCE_PROFILES.md에서 복사·수정(★과거/장기 조사는 recency 미게이트=최신 강요 안 함). 예: 시장규모
 STD=$(python refledger.py standard $SLUG --knobs '{"min_independent_sources":3,"min_distinct_hosts":3,"max_age_days":180,"min_dated_fraction":0.5,"fatal_domains":["breadth","consistency"]}' | python -c "import sys,json;print(json.load(sys.stdin)['standard_id'])")
 # 1) 루프: ingest -> published(발행일) -> finding(--conclusion으로 결론에 묶음) -> grade  (ledger가 append-only로 누적)
 python refledger.py published $SLUG <art_id> 2026-03-10       # 콘텐츠 발행일(출처에서 읽어 입력; 바이트 추론 금지)
