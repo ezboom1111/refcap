@@ -33,6 +33,10 @@ Pick exactly ONE executor per source, run it, then seal the load-bearing claims 
 3. **User-pain / feature-gap / requirement / voice-of-customer?** → **`product-planning`** (farm lens).
 4. **Generic web page / PDF / dashboard / long article (not video, not market/product)?** → **`deep-browser-research`**.
 5. **Just need a tamper-evident bundle of pages you already know?** → drive **`browser-agent-mcp-farm`** directly.
+6. **Want the NON-OBVIOUS / hidden / mispriced / underrated answer — not the obvious brand answer?** (숨은 꿀 /
+   저평가 / 남들 모르는 / 선제적 알파) → **`leesearch-alpha`** (thesis-driven, PUBLIC-only weak-signal triangulation +
+   a falsifiable prediction, refined across passes; login EXCLUDED). Use when the answer is an INFERENCE from many
+   scattered public clues, not a lookup.
 
 ## Invariants (every route)
 - **One skill per source.** Never run light + heavy on the same clip.
@@ -51,6 +55,7 @@ Pick exactly ONE executor per source, run it, then seal the load-bearing claims 
 | market | `market-scan` | farm (shared) |
 | product | `product-planning` | farm (shared) |
 | generic web | `deep-browser-research` | personal |
+| hidden alpha | `leesearch-alpha` (refcap Rank-7 + ALPHA_PLAYBOOK) | personal |
 | evidence gate | `browser-agent-mcp-farm` | farm (shared) |
 
 Farm skills keep their neutral names (shared, Apache-2.0); `leesearch-*` is the personal front-door layer on top.
