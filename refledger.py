@@ -739,24 +739,51 @@ def ingest(rdir, target, note=""):
             return {"error": f"fetch failed: {e}", "source": target}
         with open(dest, encoding="utf-8", errors="replace") as _fh:
             body = _fh.read()
-        ql = web_quality(body, http_status=status) if t == "html" else json_quality(body, http_status=status)
+        if t == "json":
+            ql = json_quality(body, http_status=status)
+        else:
+            # t == 'html', but detect_type is depth-0 (ext/scheme) and misses structured endpoints on
+            # non-'api.' hosts (openapi.naver.com, dapi.kakao.com, registry.npmjs.org, .../api/v2/... with
+            # no ext). MECHANICAL sniff (not a content classifier): if the fetched body parses as JSON,
+            # label it via json_quality so API_ERROR/MALFORMED/EMPTY/rate-limit detection runs instead of
+            # the HTML-tuned web_quality (which false-EMPTYs a valid array and false-OKs a >1500-char error).
+            try:
+                json.loads(body)
+                is_json = True
+            except Exception:
+                is_json = False
+            ql = json_quality(body, http_status=status) if is_json else web_quality(body, http_status=status)
         return ledger_append(rdir, type=t, source=target, method="refledger/fetch",
                              path=dest, canonical_path=dest, sha256=sha256_file(dest),
                              quality_label=ql, note=note)
+    # remote already-served file of a register-only kind -> FETCH it first. The register-only branches below
+    # sha256 a LOCAL path; a bare http(s) URL would otherwise register sha256=None = an empty UNVERIFIABLE shell
+    # (QA-300 #1, the top cross-domain defect: arxiv PDFs, raw CHANGELOG.md, remote CSVs all broke). Reuses
+    # _http_get's SSRF guard + 50MB cap; lawful ($0, already-served, no cookies/anti-bot); no content classifier
+    # (quality stays UNKNOWN for binary/agent-read kinds; transcripts keep parse_timed's label) -> brain uncoded.
+    local = target
+    if target.lower().startswith("http") and t in ("transcript", "image", "text", "pdf", "csv", "audio"):
+        ext = os.path.splitext(urllib.parse.urlparse(target).path)[1] or ("." + t)
+        local = os.path.join(artdir, "art_" + sha256_bytes(target.encode())[:12] + ext)
+        try:
+            _http_get(target, local)
+        except Exception as e:
+            return {"error": f"fetch failed: {e}", "source": target}
+    method = "refledger/fetch" if local != target else "register"
     if t == "transcript":
-        segs, quality = parse_timed(target if os.path.exists(target) else "")
-        canon = target + ".segments.json"
+        segs, quality = parse_timed(local if os.path.exists(local) else "")
+        canon = local + ".segments.json"
         if segs:
             with open(canon, "w", encoding="utf-8") as _fh:
                 _fh.write(canonical_json(segs))
-        sha = sha256_file(canon if segs else target)
-        return ledger_append(rdir, type="transcript", source=target, method="register",
-                             path=target, canonical_path=(canon if segs else target),
+        sha = sha256_file(canon if segs else local)
+        return ledger_append(rdir, type="transcript", source=target, method=method,
+                             path=local, canonical_path=(canon if segs else local),
                              sha256=sha, quality_label=quality, note=note)
-    # image / text / pdf: register as-is; the AGENT reads it (vision for images, text for the rest)
-    sha = sha256_file(target) if os.path.exists(target) else None
-    return ledger_append(rdir, type=t, source=target, method="register", path=target,
-                         canonical_path=target, sha256=sha, quality_label="UNKNOWN",
+    # image / text / pdf / csv / audio: register as-is; the AGENT reads it (vision for images, text otherwise)
+    sha = sha256_file(local) if os.path.exists(local) else None
+    return ledger_append(rdir, type=t, source=target, method=method, path=local,
+                         canonical_path=local, sha256=sha, quality_label="UNKNOWN",
                          note=note + (" | 에이전트가 직접 읽음(vision/text)" if t == "image" else ""))
 
 
