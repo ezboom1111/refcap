@@ -37,6 +37,18 @@ answer" and the real pick is hidden in scattered public records.
 5. **Refine / iterate** — open leads + missing legs via `frontier_open(hypothesis_id)`; next pass adds more PUBLIC
    fragments → re-run `triangulate` → convergence GROWS or a leg gets cleanly DISCONFIRMED. Keep digging.
 
+## Invocation (refcap CLI — the loop is fully shell-drivable)
+```bash
+SLUG=$(python refledger.py open "<investigation goal>")
+HID=$(python refledger.py hypothesis $SLUG "<thesis>" --signature "<pattern>" --decay "<why-hidden/when-decays>" | jq -r .hypothesis_id)
+# ingest a PUBLIC source -> register -> tag a weak signal to the thesis:
+python refledger.py finding $SLUG "<signal>" OBSERVED $AID --quote "<verbatim>" --hypothesis $HID --polarity confirms
+python refledger.py triangulate $SLUG $HID          # independent convergence REPORT (distinct host AND modality)
+python refledger.py predict $SLUG "<falsifiable claim>" 0.6 --by 2027-06-30 --hypothesis $HID
+python refledger.py digest $SLUG                     # SUMMARY.md surfaces 가설+삼각측량+예측
+```
+Then seal the load-bearing PUBLIC bytes through the farm cite-or-fail gate (browser-agent-mcp-farm).
+
 ## PUBLIC (login-free) source taxonomy
 - **(a) 수주/funding concentration**: NTIS public project facets · 나라장터 g2b 낙찰결과(OpenAPI) · 알리오 · 국정감사 자료
 - **(b) tech-transfer**: Google Patents / KIPRIS public co-assignee · 기술이전 공시 · 산학 MOU 보도자료

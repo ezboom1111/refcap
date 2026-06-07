@@ -15,16 +15,18 @@
 - **kind='conclusion_grade'** 행 (코드, `grade_conclusion()`): 체크. 도메인별 {value,bar,met,slack}, overall 4상태, 핀된 standard_id, inline `sufficiency_not_truth=true`.
 
 ## 선언 knobs (전부 화이트리스트+closed; 생략⇒그 도메인 UNGRADED, 절대 기본값화 안 함)
-`min_independent_sources` · `min_distinct_hosts`(가드: ≤sources) · `max_age_days` · `min_dated_fraction` · `dup_similarity`(Jaccard tau—에이전트 선언, 하드코딩 금지) · **`fatal_domains`**(어느 도메인 SHORTFALL이 overall SHORTFALL—코드가 특정 도메인 특권화 0; 가드: {traceability}만이면 invalid) · `min_distinct_source_types`(optional, 기존 `type` 필드 문자열-distinct만).
+`min_independent_sources` · `min_distinct_hosts`(가드: ≤sources) · `max_age_days` · `min_dated_fraction` · `dup_similarity`(Jaccard tau—에이전트 선언, 하드코딩 금지) · **`fatal_domains`**(어느 도메인 SHORTFALL이 overall SHORTFALL—코드가 특정 도메인 특권화 0; 가드: {traceability,source_type,modality}만이면 invalid) · `min_distinct_source_types`(optional, 기존 `type` 필드 문자열-distinct만) · **`required_modalities`**(optional, 스펙후 SHIP — 클래스 SET 요구: web/structured/document/av/image 각각 존재해야; *카운트 아님*, downgrade-only).
 
-## 5 기계적 채점 도메인 (각각 표준에 명명)
+## 6 기계적 채점 도메인 (각각 표준에 명명; live grade가 emit하는 도메인 키 = breadth/recency/consistency/traceability/source_type/modality)
 | 도메인 | 표준 | 계산 |
 |---|---|---|
-| Currentness | ISO/IEC 25012 | date-diff(as_of, published_at), 4상태 |
+| Currentness(recency) | ISO/IEC 25012 | date-diff(as_of, published_at), 4상태 |
 | Breadth/Volume | GRADE imprecision | 유효 독립소스 수 (union-find) |
 | Independence | Denzin triangulation | distinct `_host`(eTLD+1) 수 |
 | Consistency | GRADE inconsistency | `_numeric_conflicts` 재사용 (boolean) |
 | Traceability | W3C PROV / cite-or-fail | always-met (sha256 존재) |
+| source_type | (declared_unverified) | distinct `type` 수 ≥ min_distinct_source_types — downgrade-only |
+| **Modality**(스펙후 SHIP) | (declared_unverified) | `_MODALITY_CLASS`로 type→클래스 매핑, required_modalities의 *각 클래스 존재* — SET 요구, downgrade-only |
 
 ## grade_conclusion(rdir, conclusion_id, standard_id, as_of=None) — 알고리즘 (sharpening 반영)
 - **STEP 0 BIND**: `standard_id`는 **명시적 에이전트 인자**(predict 앵커처럼 존재검증, unknown이면 ValueError; "latest/only standard"로 폴백 절대 금지=어느 바가 적용되나=두뇌결정). standard_id를 등급에 핀.
@@ -61,3 +63,10 @@ verify advisory 블록(ok 불변, fake_corroboration처럼). refinsight=TWO CLOC
 - CIB/봇/astroturf 탐지 없음(단일사용자 IP/계정 그래프 0). 누락-체리픽 비기계화(분모만 surface).
 - NOT ASSESSED(명명, 절대 위조 안 함): risk-of-bias·publication bias·indirectness·정확성/신뢰성·I²/Egger·OCEBM 소스등급.
 - 검증은 영원히 abstain 가능(단일사용자가 N≥20 못 채울 수)=규율이지 입증된 오라클 아님을 정직히.
+
+## 스펙 이후 SHIP (이 청사진 너머, 2026-06-07)
+이 문서는 원 61-에이전트 *청사진*. 실제 출하에서 더해진 것:
+- **Modality 도메인 + `required_modalities`**: 텍스트-only 편향 차단(웹4개로 MEETS 불가; 정형/문서/영상 *각 클래스* 강제). 기계적 `_MODALITY_CLASS`(type→class). downgrade-only. → EVIDENCE_PROFILES #8, RESEARCH_RUNBOOK 규칙13.
+- **벽 라벨 분기**(web_quality): `JS_WALL`(SPA셸→farm 브라우저 렌더, 로그인free) / `BOT_WALL`(captcha→멈춤·우회금지) / `LOGIN_WALL`(→경로밖 제외) / `DOWNLOAD_ONLY`(→로컬파싱). 막힌 1차 모달리티는 modality SHORTFALL로 가시화.
+- **Rank-7 ALPHA 레이어**(별도 층): `set_hypothesis`/`record_finding(hypothesis_id,polarity)`/`triangulate`/`predict(hypothesis_id)` = 약신호 조립으로 비-자명 알파 추론 + 반증가능 예측. predict의 conclusion_id+hypothesis_id가 grade_validity(#6) 조인키. → **ALPHA_ARCHITECTURE.md** + **ALPHA_PLAYBOOK.md**(공개전용·연속·범용).
+- **CLI**: standard/grade + **hypothesis/triangulate**, predict/finding에 --hypothesis/--polarity/--conclusion. digest가 알파 가설·삼각측량·예측 표면화.

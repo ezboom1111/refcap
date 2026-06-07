@@ -66,6 +66,16 @@ class AlphaLayer(unittest.TestCase):
         self.assertIn("예측", txt)               # predictions surfaced
         self.assertIn("thesis Z", txt)
 
+    def test_verify_flags_alpha_signal_on_walled_capture(self):   # Rank-7 advisory: alpha signal resting on a walled capture
+        h = R.set_hypothesis(self.r, "thesis")["hypothesis_id"]
+        p = os.path.join(self.r, "bad.txt"); open(p, "w", encoding="utf-8").write("login required")
+        a = R.ledger_append(self.r, type="html", source="https://x.com/login", method="m", path=p,
+                            canonical_path=p, sha256=R.sha256_file(p), quality_label="LOGIN_WALL")
+        R.record_finding(self.r, "sig", "OBSERVED", a["artifact_id"], quote="login required", hypothesis_id=h, polarity="confirms")
+        v = R.verify(self.r)
+        self.assertIn(a["artifact_id"], v["alpha_signals_on_bad_capture"])
+        self.assertTrue(v["ok"])                 # advisory only — ok unchanged (warning, agent decides)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

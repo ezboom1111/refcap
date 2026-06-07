@@ -39,15 +39,15 @@ leesearch 라우터에 **알파 브랜치** 추가: 사용자가 "숨은 알파/
 ## R5 — 신호 IC/decay 스코어 [DEFER]
 신호유형별 *정보계수*(어느 신호가 실제로 예측력 있나)·decay 정량화 = signal-engineer 영역. **resolved 예측이 쌓이기 전엔 짓지 마라**(검토 경고: caller 없는 축 금지). triangulate의 net_independent로 충분, IC는 데이터 쌓인 뒤.
 
-## leesearch 생태계 갭 (현재 부족한 것)
-| 갭 | 상태 | 다음 |
+## leesearch 생태계 갭 (상태 — 2026-06-07 갱신)
+| 항목 | 상태 | 비고 |
 |---|---|---|
-| 알파 가설/삼각측량 레이어 | ✅ BUILT (R1) | hunt 신호를 적재 |
-| 벽뚫기(JS/API/다운로드) 표준 분기 | ⚠️ 수동 | R2: 브라우저 에스컬레이션 표준화 |
-| leesearch-alpha 라우팅 브랜치 | ❌ 없음 | R3: 서브스킬 |
-| 예측 검증 오라클(grade_validity) | ❌ 미구현(데이터 0) | R4: 예측 쌓고 → 짓기 |
-| 신호 IC/decay 정량 | ❌ 의도적 보류 | R5: 데이터 후 |
-| CLI 노출(hypothesis/triangulate) | ❌ Python API만 | 소소 follow-up |
+| 알파 가설/삼각측량 레이어 | ✅ SHIP (R1, cd2b6c4) | hunt 신호 적재 완료(12 예측) |
+| 벽뚫기 표준 분기 | ✅ SHIP (R2, d942be5) | JS_WALL→렌더 / BOT→멈춤 / LOGIN→제외 / DOWNLOAD→로컬파싱 (web_quality 라벨) |
+| leesearch-alpha 라우팅 브랜치 | ✅ SHIP (R3, d6e79e8) | 정본 refcap, route6, ~/.claude+~/.codex 설치 |
+| CLI 노출(hypothesis/triangulate/--polarity/--hypothesis) + digest 통합 | ✅ SHIP (1fbc64d) | 알파 루프 shell-구동 + digest 표면화 |
+| 예측 검증 오라클(grade_validity) | ⏳ DATA-GATED (R4) | 12/20 누적 중; N≥20에서 짓기(데이터-게이트, 갭 아님) |
+| 신호 IC/decay 정량 | ⏸️ DEFER (R5) | resolved 예측 쌓인 뒤(검토: caller 없는 축 금지) |
 
 ## 규율 (과잉금지 — 검토 반영)
 - **USE→배워서→짓기**: alpha hunt(실행)가 *아키텍처가 뭘 요구하는지* 드러낸 뒤 R2~를 짓는다. R1 커널만 *지금* 지은 건 (a) 알파의 정의적 primitive라 모양이 안 변하고 (b) 불용 Rank-1을 *소비*해 검증(5번)을 전진시키기 때문 — 검토의 "caller 있을 때만 / 검증 enabler"를 통과(sample_n과 달리 demanding task=hunt가 *지금* 요구).

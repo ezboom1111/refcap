@@ -892,10 +892,13 @@ def verify(rdir):
         all_cids = {f.get("conclusion_id") for f in finds if f.get("conclusion_id")}
         cg = {"n_graded": len(latest_g), "n_shortfall": len(sf),
               "n_ungraded_conclusions": len(all_cids - graded), "shortfalls": sf}
+    alpha_bad = [f["artifact_id"] for f in finds                     # Rank-7: an alpha SIGNAL resting on a walled/bad
+                 if f.get("hypothesis_id") and arts.get(f["artifact_id"], {}).get("quality_label") in BAD_QUALITY]
     return {"ok": not dangling and not mismatch and not unverifiable, "dangling_anchors": dangling,
             "hash_mismatch": mismatch, "unverifiable": unverifiable, "low_quality_citations": low_q,
             "capture_errors": capture_errors, "fake_corroboration": list(dict.fromkeys(fake_corrob)),
             "numeric_conflicts": _numeric_conflicts(finds), "open_at_stop": frontier_state(rdir)["open"],
+            "alpha_signals_on_bad_capture": list(dict.fromkeys(alpha_bad)),   # capture (login/JS-walled) -> suspect signal
             "conclusion_grades": cg}
 
 

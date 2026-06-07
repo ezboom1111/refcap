@@ -112,6 +112,20 @@ Rank-6는 *스칼펠이지 의무가 아니다*. 모든 finding에 평가표를 
 5. **Goodhart 경계.** SHORTFALL을 약하거나 중복인 소스로 메우지 마라 — grade가 잡는다(eff_n 붕괴 · waste=raw/eff_n · syndication_suspected). 채우려면 *질 좋은 독립* 소스로.
 > 요지: 평가표는 능력을 *제한*하는 게 아니라, *판돈 큰 소수*에 한해 "vibe → 읽는 등급"으로 *보이게* 한다. 무차별 적용은 금지 — 그게 유일하게 "나빠지는" 경로다.
 
+## Rank-7 ALPHA 루프 — 숨은/저평가 X를 *공개 파편 조립*으로 (알파 의도일 때만)
+*검색*이 아니라 *추론*: 아무 단일 소스도 진술 안 한 비-자명·선제적 결론을 흩어진 *공개* 약신호 조립으로. **로그인/회원 데이터는 경로 밖**(범용·재현·ToS — 엣지는 *접근*이 아니라 *조립*). 전체 방법론=**ALPHA_PLAYBOOK.md**, 라우팅=**leesearch-alpha** 스킬.
+```bash
+# 가설 선언 → 약신호 태그(polarity) → 삼각측량 → 반증가능 예측  (전부 CLI 구동)
+python refledger.py hypothesis $SLUG "<thesis>" --signature "<패턴>" --decay "<왜숨었나/언제끝나나>"   # -> hypothesis_id
+python refledger.py finding $SLUG "<signal>" OBSERVED $AID --quote "<verbatim>" --hypothesis $HID --polarity confirms
+python refledger.py triangulate $SLUG $HID    # 독립(distinct host AND modality) 수렴만 REPORT — 결정적인지·decay 판단은 너
+python refledger.py predict $SLUG "<falsifiable claim>" 0.6 --by 2027-06-30 --hypothesis $HID   # 선제적 베팅
+```
+- **수렴-not-단일소스**: `net_independent>0` = 약신호가 독립적으로 모임(결정성은 네 판단; 코드 임계값 0).
+- **연속**: append-only로 패스마다 공개 신호 더 → `triangulate` 재실행 시 수렴 자람 + 정직한 DISCONFIRM(꿈의 leg가 죽는 것도 성공). 미특정 lead는 `frontier_open`로 지속.
+- **검증 누적**: 픽마다 `predict` → 미래 `resolve` → N≥20에서 grade_validity가 "선제적 알파가 실제 맞나" 채점 = *연속 탐구가 검증데이터를 만든다*.
+- **벽**(규칙13c): `JS_WALL`→farm 브라우저 렌더(공개) / `LOGIN_WALL`→제외 / `DOWNLOAD_ONLY`→로컬파싱.
+
 ## 경계 (헷갈리면)
 - **코드가 하는 전부**: 타입 dispatch(확장자/스킴), sha256·dedupe(logical key)·tamper, JSONL append/reduce, dangling 거부, 캡처품질 라벨 보존, farm_plan emit. **판단 0.**
 - **네가 하는 전부**: 무슨 데이터·어느 소스·다음에 뭘·비정형 전환 적응·OBSERVED 판정·언제 멈출지·교차일치 의미판단·claim 문장.
