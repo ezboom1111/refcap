@@ -59,3 +59,18 @@ Pick exactly ONE executor per source, run it, then seal the load-bearing claims 
 | evidence gate | `browser-agent-mcp-farm` | farm (shared) |
 
 Farm skills keep their neutral names (shared, Apache-2.0); `leesearch-*` is the personal front-door layer on top.
+
+## 출력 폴더링 계약 (필수 — 평면 덤프 금지, gstack처럼 스며들게)
+한 조사 = **하나의 프로젝트 루트** 아래로 *전부* 들어간다. run마다 최상위 형제 폴더를 새로 만들지 마라(그게 174MB·50개 형제 mess의 원인이었다). 계약:
+```
+<project>/                     # 예: ~/Desktop/graduate school
+├─ INDEX.md                    # 맵: 각 run이 뭔지 + reports 포인터 (조사 끝에 갱신)
+├─ reports/                    # 사람이 읽는 합성 .md (결론·픽·alpha 리포트)
+├─ inputs/                     # 사용자가 넣은 원본 (PDF 등)
+├─ cache/                      # 비-연구물 (OCR 모델 tessdata 등 — 공유, run 아님)
+├─ dcollection-artifacts/      # 구조화 수집(있으면)
+└─ runs/
+    ├─ farm/<entity>/<slug>/   # farm 캡처 번들 (entity=대학/기관; 많으면 그룹)
+    └─ leesearch/<slug>/       # leesearch/refledger run
+```
+규칙: ① farm/leesearch run을 시작할 때 `base`(또는 runDir)를 **반드시 `<project>/runs/<tool>/...` 아래**로 줘라 — 절대 `<project>/<flat_name>`로 주지 마라. ② 합성 .md는 `reports/`에. ③ 원본 입력은 `inputs/`, 모델·캐시는 `cache/`. ④ 조사 끝에 `INDEX.md`를 갱신(또는 `python refledger.py digest`로 run별 SUMMARY). ⑤ OCR traineddata 같은 *공유 모델*은 연구 루트에 흩지 말고 `cache/tessdata/`(또는 사용자 공용 캐시)로. = 새 run이 *프로젝트에 스며든다*, 형제로 흩어지지 않는다.
