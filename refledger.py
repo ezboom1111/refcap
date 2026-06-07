@@ -522,6 +522,11 @@ _NUM_RE = re.compile(r"\d+(?:,\d{3})*(?:\.\d+)?")   # comma only as a thousands 
 _CJK_STOP = {"입니다", "이다", "한다", "합니다", "됩니다", "있다", "없다", "에서", "에게", "으로", "이고",
              "이며", "하는", "했다", "된다", "이라", "라고", "까지", "부터", "처럼", "보다", "예요", "에요",
              "이에요", "그리고", "하지만", "그러나", "또는", "이런", "저런", "그런"}
+_EN_STOP = {"according", "reached", "posted", "reported", "including", "between", "during", "within", "around",
+            "about", "after", "before", "their", "these", "those", "which", "while", "would", "could", "should",
+            "there", "where", "when", "with", "from", "that", "this", "have", "been", "were", "will", "also",
+            "into", "over", "than", "then", "them", "they", "your", "more", "most", "some", "such", "only",
+            "very", "just", "like", "made", "make", "said", "says", "where", "what", "here", "still"}
 
 
 def _numeric_conflicts(finds):
@@ -534,8 +539,8 @@ def _numeric_conflicts(finds):
         words = set()
         for w in re.findall(r"[^\W\d_]{2,}", s, re.UNICODE):
             wl = w.lower()
-            if wl in _CJK_STOP:
-                continue                            # skip KR copulas/particles (입니다/에서/...) = cry-wolf source
+            if wl in _CJK_STOP or wl in _EN_STOP:
+                continue                            # skip KR copulas + EN fillers (according/which/...) = false-conflict source
             if not wl.isascii() or len(wl) >= 4:    # CJK 2+ char = content token; ASCII needs 4+ (skip is/of/the)
                 words.add(wl)
         return nums, words
@@ -728,7 +733,8 @@ def grade_conclusion(rdir, conclusion_id, standard_id, as_of=None):
     if mst is not None:
         ntypes = len({arts[a].get("type", "") for a in aset})
         domains["source_type"] = {"value": ntypes, "bar": mst, "met": (ntypes >= mst), "basis": "declared_unverified"}
-    fatal = set(knobs.get("fatal_domains") or [])
+    _fd = knobs.get("fatal_domains")
+    fatal = set(_fd) if isinstance(_fd, list) else set()   # malformed fatal_domains (non-list) -> UNGRADED (warned at declare)
     shortfall = sorted(d for d in fatal if domains.get(d, {}).get("met") is False)
     unknown_fatal = sorted(d for d in fatal if domains.get(d, {}).get("met") is None)
     if not fatal:

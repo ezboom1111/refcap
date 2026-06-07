@@ -223,6 +223,21 @@ class HardeningPass(unittest.TestCase):   # the adversarial python-reviewer pass
         sid = R.set_standard(self.r, min_independent_sources=2, min_distinct_hosts=3, fatal_domains=["breadth"])["standard_id"]
         self.assertIn("volume_bar_incoherent", R.grade_conclusion(self.r, "C1", sid)["standard_warnings"])
 
+    def test_filler_word_not_false_conflict(self):   # Q300 comb-07: shared 'according' filler != a numeric conflict
+        a, b = _art(self.r, "https://a.com/1"), _art(self.r, "https://b.com/2")
+        R.record_finding(self.r, "x", "OBSERVED", a["artifact_id"], quote="revenue reached 500 according first", conclusion_id="C1")
+        R.record_finding(self.r, "x", "OBSERVED", b["artifact_id"], quote="profit posted 700 according second", conclusion_id="C1")
+        g = R.grade_conclusion(self.r, "C1", R.set_standard(self.r, fatal_domains=["consistency"])["standard_id"])
+        self.assertTrue(g["domains"]["consistency"]["met"])      # different entities (revenue/profit), only filler shared
+        self.assertEqual(g["overall"], "MEETS")
+
+    def test_nonlist_fatal_domains_does_not_crash(self):   # Q300 inv-18: fatal_domains=5 -> set(5) crash
+        a = _art(self.r, "https://a.com/1")
+        R.record_finding(self.r, "x", "OBSERVED", a["artifact_id"], quote="q", conclusion_id="C1")
+        std = R.set_standard(self.r, min_independent_sources=1, fatal_domains=5)
+        self.assertIn("fatal_domains_not_list", std["invalid_fields"])
+        self.assertEqual(R.grade_conclusion(self.r, "C1", std["standard_id"])["overall"], "UNGRADED")   # no crash
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
