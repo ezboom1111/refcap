@@ -82,6 +82,27 @@ python refledger.py calib $SLUG   # Brier(낮을수록정확)+5버킷 신뢰도�
 - **모순 후보**(Rank3): verify의 `numeric_conflicts`는 *같은 대상어를 공유하는데 숫자가 다른* finding 쌍을 띄운다(어드바이저리). 어느 쪽이 맞는지는 *네가* 정하고 frontier_note로 플래그(코드는 판정 안 함).
 - **누락 점검**(Rank5): 멈추기 전, *안 본 소스 클래스*(공식사이트·반대후기·비한국어·1차문헌)를 frontier_open하고 각각 finding 또는 "declined-because" reason으로 close하라. verify의 `open_at_stop`이 *디제스트 시점에 안 닫힌 것*을 보여준다 = 0에 수렴시켜라. 단일 소스에 흔들리는 결론(LOO 취약)은 독립 도메인으로 교차확인 후 멈춰라.
 
+## 충분성 루프 — 몇 개면 멈추나 (Rank-6; 1회 패스 아니라 반복)
+리서치는 *1회가 아니다*. 모으고→채점하고→미달이면 *부족분을 채우러 더* 모으고→재채점→**선언한 기준 충족시 멈춘다**. "최소 몇 개?"의 답 = *네가 `set_standard`로 선언한 바*(코드가 정하지 않음 = 두뇌-인-코드 금지).
+```bash
+# 0) 이 조사의 바 선언(주제별; 코드는 이 숫자를 안 정한다). 예: 시장규모
+STD=$(python refledger.py standard $SLUG --knobs '{"min_independent_sources":3,"min_distinct_hosts":3,"max_age_days":180,"min_dated_fraction":0.5,"fatal_domains":["breadth","consistency"]}' | python -c "import sys,json;print(json.load(sys.stdin)['standard_id'])")
+# 1) 루프: ingest -> published(발행일) -> finding(--conclusion으로 결론에 묶음) -> grade  (ledger가 append-only로 누적)
+python refledger.py published $SLUG <art_id> 2026-03-10       # 콘텐츠 발행일(출처에서 읽어 입력; 바이트 추론 금지)
+python refledger.py finding $SLUG "<주장>" OBSERVED <art_id> --quote "<인용>" --conclusion C1
+python refledger.py grade $SLUG C1 $STD
+#   -> overall: MEETS | SHORTFALL(어느 도메인) | UNKNOWN | UNGRADED + 도메인별 {value,bar,met}
+# 2) SHORTFALL이면 *부족분이 정확히 뭔지* 등급이 말한다:
+#    breadth effective_sources=2<3 → 독립 도메인 1개 더 ingest / recency freshest_age=200d>180 → 더 최신 출처
+#    consistency 충돌 → 모순 해소(양쪽 기록 + frontier_note). 부족분을 frontier_open → 더 ingest → 다시 grade.
+#    **MEETS까지 반복** (또는 예산/frontier 소진시 정직한 SHORTFALL 공개).
+```
+- **멈춤 조건 = MEETS**(선언한 fatal_domains 전부 met) 또는 예산/소진 + 정직한 SHORTFALL 공개. "느낌상 충분"이 아니라 *읽는 등급*.
+- **여러 회 누적**: 한 번에 소화 안 되면 ingest→grade를 *여러 번* 반복하며 근거가 쌓인다 = 그게 루프(1회기 아님).
+- **시간차(트렌드)**: 최신성은 *만료*된다 — 오늘 MEETS가 1주 뒤 recency-SHORTFALL이 될 수 있다(`--as-of`로 재실행). 트렌드는 *재조사*가 정상.
+- **eff_n=중복-바닥**: 같은 호스트/보도자료 복사본은 1개로 붕괴(distinct_hosts vs effective_sources 차=syndication_suspected). "3개 가져왔다"가 아니라 "*독립* 3개"가 멈춤조건.
+- **두뇌-인-코드 경계**: 루프를 *도는 것*(다음에 뭘 ingest, 언제 포기)은 네 판단(VERB). 코드는 *게이지*(grade)와 *부족분*만 준다. min-N을 코드가 강제하지 않는다 = 네가 선언.
+
 ## 경계 (헷갈리면)
 - **코드가 하는 전부**: 타입 dispatch(확장자/스킴), sha256·dedupe(logical key)·tamper, JSONL append/reduce, dangling 거부, 캡처품질 라벨 보존, farm_plan emit. **판단 0.**
 - **네가 하는 전부**: 무슨 데이터·어느 소스·다음에 뭘·비정형 전환 적응·OBSERVED 판정·언제 멈출지·교차일치 의미판단·claim 문장.

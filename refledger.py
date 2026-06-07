@@ -303,7 +303,7 @@ def ledger_append(rdir, **row):
         return art
 
 
-def record_finding(rdir, text, label, artifact_id, quote="", locator="", confidence="med", corroborated_by=None):
+def record_finding(rdir, text, label, artifact_id, quote="", locator="", confidence="med", corroborated_by=None, conclusion_id=""):
     """Local cite-or-fail: a finding MUST anchor to a registered artifact, else refuse.
     `quote` = the VERBATIM span from the artifact that grounds the claim (NOT the claim text - the farm
     gate rejects a claim whose anchor text is not literally in the cited bytes; learned e2e). `locator` =
@@ -318,8 +318,8 @@ def record_finding(rdir, text, label, artifact_id, quote="", locator="", confide
     for aid in cb:
         if aid not in ids:
             raise ValueError(f"dangling corroboration: artifact_id {aid!r} not in ledger")
-    f = {"kind": "finding", "artifact_id": artifact_id, "text": text, "label": label,
-         "quote": quote, "locator": locator, "confidence": confidence, "corroborated_by": cb, "ts": _now()}
+    f = {"kind": "finding", "artifact_id": artifact_id, "text": text, "label": label, "quote": quote,
+         "locator": locator, "confidence": confidence, "corroborated_by": cb, "conclusion_id": conclusion_id, "ts": _now()}
     _append_jsonl(path, f)
     return f
 
@@ -550,6 +550,205 @@ def _numeric_conflicts(finds):
     return out
 
 
+# ---- Rank-6 evidence-STANDARD layer: declare-then-check sufficiency grade (see RANK6_SPEC.md) -------
+# The agent/user DECLARES the bar (kind='standard' row); code only COUNTS / date-diffs / host-clusters and
+# GRADES (kind='conclusion_grade'). NO code-resident default bar (a grader-read default = the forbidden
+# gyeongju threshold-tree). Grades SUFFICIENCY (enough recent, distinct-host, non-redundant, conflict-free
+# corroboration vs the DECLARED bar) - NEVER TRUTH (fabrication-at-capture stays the open roof).
+_STD_KNOBS = {"min_independent_sources", "min_distinct_hosts", "max_age_days", "min_dated_fraction",
+              "dup_similarity", "fatal_domains", "min_distinct_source_types"}
+_ARITHMETIC_DOMAINS = {"breadth", "recency", "consistency"}   # carried by math over hash-pinned bytes
+_GRADE_DOMAIN_NAMES = {"breadth", "recency", "consistency", "traceability", "source_type"}
+_SHINGLE_K = 3   # FIXED (code-owned, NOT per-topic); only the dup_similarity CUTOFF is agent-declared
+
+
+def _parse_date(s):
+    try:
+        return datetime.datetime.strptime(str(s)[:10], "%Y-%m-%d").date()
+    except (ValueError, TypeError):
+        return None
+
+
+def _shingles(text):
+    # reuse the CJK-aware tokenizer from _numeric_conflicts (so k/normalization can't smuggle topic-sensitivity);
+    # word K-gram shingles of the quote bytes for near-DUPLICATE (string near-identity, NOT semantic similarity).
+    toks = []
+    for w in re.findall(r"[^\W\d_]{2,}", (text or "").lower(), re.UNICODE):
+        if w in _CJK_STOP:
+            continue
+        if not w.isascii() or len(w) >= 4:
+            toks.append(w)
+    if len(toks) < _SHINGLE_K:
+        return frozenset((w,) for w in toks)   # 1-tuples: homogeneous with the K-gram tuples (else never intersect)
+    return frozenset(tuple(toks[i:i + _SHINGLE_K]) for i in range(len(toks) - _SHINGLE_K + 1))
+
+
+def _jaccard(a, b):
+    if not a or not b:
+        return 0.0
+    u = len(a | b)
+    return len(a & b) / u if u else 0.0
+
+
+def _uf_components(items, edges):
+    """Deterministic union-find component COUNT (order-independent; smaller id wins as root)."""
+    parent = {x: x for x in items}
+
+    def find(x):
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]; x = parent[x]
+        return x
+    for a, b in edges:
+        ra, rb = find(a), find(b)
+        if ra != rb:
+            lo, hi = (ra, rb) if ra < rb else (rb, ra)
+            parent[hi] = lo
+    return len({find(x) for x in items})
+
+
+def set_published(rdir, artifact_id, published_at):
+    """Rank-6: record the CONTENT publish date for an artifact (agent-supplied, declared_unverified) - distinct
+    from the capture `ts`. Append-only kind='pubdate' row (capture_measure precedent). NEVER inferred from bytes."""
+    ids = {r["artifact_id"] for r in _read_jsonl(os.path.join(rdir, "ledger.jsonl")) if r.get("kind") == "artifact"}
+    if artifact_id not in ids:
+        raise ValueError(f"unknown artifact_id {artifact_id!r}")
+    if _parse_date(published_at) is None:
+        raise ValueError(f"published_at must be YYYY-MM-DD, got {published_at!r}")
+    row = {"kind": "pubdate", "artifact_id": artifact_id, "published_at": str(published_at), "ts": _now()}
+    _append_jsonl(os.path.join(rdir, "ledger.jsonl"), row)
+    return row
+
+
+def set_standard(rdir, **knobs):
+    """Rank-6: DECLARE the evidence bar for a conclusion (the agent's per-topic judgment). kind='standard' row,
+    standard_id=sha256(canonical knobs). Unknown knob -> raise (typo guard); incoherent/malformed -> invalid_fields
+    advisory. NO code-resident default: an omitted knob => that domain UNGRADED (never code-defaulted)."""
+    bad = set(knobs) - _STD_KNOBS
+    if bad:
+        raise ValueError(f"unknown standard knobs: {sorted(bad)} (allowed: {sorted(_STD_KNOBS)})")
+    invalid = []
+    mis, mds = knobs.get("min_independent_sources"), knobs.get("min_distinct_hosts")
+    if mis is not None and mds is not None and mds > mis:
+        invalid.append("volume_bar_incoherent")             # distinct hosts can't exceed eff sources after collapse
+    fd = knobs.get("fatal_domains")
+    if fd is not None and not isinstance(fd, list):
+        invalid.append("fatal_domains_not_list")            # e.g. a bare string from --knobs JSON
+    elif fd is not None:
+        if set(fd) - _GRADE_DOMAIN_NAMES:
+            invalid.append("fatal_domains_unknown")         # a typo'd domain would force permanent UNKNOWN silently
+        if set(fd) <= {"traceability", "source_type"}:
+            invalid.append("fatal_set_trivial")             # no arithmetic-carried domain => vacuous/unverified bar
+    ds = knobs.get("dup_similarity")
+    if ds is not None and not (0 < float(ds) <= 1):
+        invalid.append("dup_similarity_range")
+    canon = json.dumps(knobs, ensure_ascii=False, sort_keys=True)
+    row = {"kind": "standard", "standard_id": "std_" + sha256_bytes(canon.encode("utf-8"))[:12],
+           "knobs": knobs, "invalid_fields": invalid, "ts": _now()}
+    _append_jsonl(os.path.join(rdir, "ledger.jsonl"), row)
+    return row
+
+
+def grade_conclusion(rdir, conclusion_id, standard_id, as_of=None):
+    """Rank-6: mechanically GRADE one conclusion's evidence SUFFICIENCY vs the DECLARED standard. standard_id is an
+    EXPLICIT agent argument (validated; never a 'latest/only' fallback = a brain decision about which bar applies).
+    overall (MEETS/SHORTFALL/UNKNOWN/UNGRADED) derives PURELY from the declared fatal_domains - no code-privileged
+    domain. Deterministic. Grades sufficiency, NOT truth (sufficiency_not_truth=true)."""
+    rows = _read_jsonl(os.path.join(rdir, "ledger.jsonl"))
+    arts = {r["artifact_id"]: r for r in rows if r.get("kind") == "artifact"}
+    stds = {r["standard_id"]: r for r in rows if r.get("kind") == "standard"}
+    if standard_id not in stds:
+        raise ValueError(f"unknown standard {standard_id!r}")
+    knobs = stds[standard_id].get("knobs", {})
+    if as_of is not None and _parse_date(as_of) is None:
+        raise ValueError(f"as_of must be YYYY-MM-DD (or an ISO datetime), got {as_of!r}")
+    supports = [r for r in rows if r.get("kind") == "finding" and r.get("conclusion_id") == conclusion_id]
+    if not supports:
+        raise ValueError(f"no findings carry conclusion_id {conclusion_id!r}")
+    pub = {r["artifact_id"]: r.get("published_at") for r in rows if r.get("kind") == "pubdate" and r["artifact_id"] in arts}
+    quote, aset = {}, []
+    for s in supports:
+        q = (s.get("quote") or "")[:200]
+        for aid in [s["artifact_id"], *(s.get("corroborated_by") or [])]:
+            if aid in arts:
+                if aid not in aset:
+                    aset.append(aid)
+                if aid not in quote or len(q) > len(quote[aid]):   # longest quote per artifact (best near-dup signal)
+                    quote[aid] = q
+    aset.sort(key=lambda a: ((arts[a].get("sha256") or ""), a))    # determinism (order-independent grade)
+    host = {a: _host(arts[a].get("source", "")) for a in aset}
+    distinct_hosts = len({h for h in host.values() if h})
+    tau = knobs.get("dup_similarity")
+    shg = {a: _shingles(quote.get(a, "")) for a in aset}
+    edges = []
+    for i in range(len(aset)):
+        for j in range(i + 1, len(aset)):
+            a, b = aset[i], aset[j]
+            if host[a] and host[a] == host[b]:
+                edges.append((a, b)); continue
+            if tau is not None and _jaccard(shg[a], shg[b]) >= float(tau):   # only dup_similarity gates (no hidden bar)
+                edges.append((a, b))
+    eff = _uf_components(aset, edges) if aset else 0
+    mis, mds = knobs.get("min_independent_sources"), knobs.get("min_distinct_hosts")
+    breadth_met = ((mis is None or eff >= mis) and (mds is None or distinct_hosts >= mds)) if (mis is not None or mds is not None) else None
+    breadth = {"value": {"effective_sources": eff, "distinct_hosts": distinct_hosts, "n_supporting_artifacts": len(aset),
+                         "syndication_suspected": distinct_hosts > eff},
+               "bar": {"min_independent_sources": mis, "min_distinct_hosts": mds}, "met": breadth_met}
+    max_age = knobs.get("max_age_days")
+    asof = as_of or max((s.get("ts") for s in supports), default=_now())
+    asof_d = _parse_date(asof)
+    ages, n_dated, n_undated, future = [], 0, 0, []
+    for a in aset:
+        d = _parse_date(pub.get(a)) if pub.get(a) else None
+        if d is None:
+            n_undated += 1
+            continue
+        n_dated += 1
+        if asof_d:
+            age = (asof_d - d).days
+            if age < 0:
+                future.append({"artifact_id": a, "published_at": str(pub.get(a))})   # back-dated/anomalous
+            else:
+                ages.append(age)
+    recency_met, rec_val = None, {"n_dated": n_dated, "n_undated": n_undated, "future_dated_artifacts": future}
+    if max_age is not None:
+        n_tot = len(aset)
+        rec_val["dated_fraction"] = round((n_dated / n_tot) if n_tot else 0.0, 3)
+        if n_dated == 0 or rec_val["dated_fraction"] < (knobs.get("min_dated_fraction") or 0) or not ages:
+            recency_met = None                              # UNKNOWN (silent unless declared; cry-wolf armor)
+        else:
+            rec_val["freshest_age_days"] = min(ages)
+            recency_met = min(ages) <= max_age
+    recency = {"value": rec_val, "bar": {"max_age_days": max_age, "min_dated_fraction": knobs.get("min_dated_fraction")}, "met": recency_met}
+    conf = _numeric_conflicts(supports)
+    consistency = {"value": {"conflicts": len(conf)}, "bar": None, "met": (len(conf) == 0)}
+    trace_ok = bool(aset) and all(arts[a].get("sha256") for a in aset)
+    traceability = {"value": {"all_hashed": trace_ok}, "bar": None, "met": trace_ok}
+    domains = {"breadth": breadth, "recency": recency, "consistency": consistency, "traceability": traceability}
+    mst = knobs.get("min_distinct_source_types")
+    if mst is not None:
+        ntypes = len({arts[a].get("type", "") for a in aset})
+        domains["source_type"] = {"value": ntypes, "bar": mst, "met": (ntypes >= mst), "basis": "declared_unverified"}
+    fatal = set(knobs.get("fatal_domains") or [])
+    shortfall = sorted(d for d in fatal if domains.get(d, {}).get("met") is False)
+    unknown_fatal = sorted(d for d in fatal if domains.get(d, {}).get("met") is None)
+    if not fatal:
+        overall = "UNGRADED"
+    elif shortfall:
+        overall = "SHORTFALL"
+    elif unknown_fatal:
+        overall = "UNKNOWN"
+    elif not (fatal & _ARITHMETIC_DOMAINS):
+        overall = "UNGRADED"                                # MEETS may not rest on declared_unverified domains alone
+    else:
+        overall = "MEETS"
+    grade = {"kind": "conclusion_grade", "conclusion_id": conclusion_id, "standard_id": standard_id,
+             "overall": overall, "shortfall_reasons": shortfall, "domains": domains, "as_of": asof,
+             "standard_warnings": stds[standard_id].get("invalid_fields", []),
+             "sufficiency_not_truth": True, "recency_basis": "declared_date_unverified", "ts": _now()}
+    _append_jsonl(os.path.join(rdir, "ledger.jsonl"), grade)
+    return grade
+
+
 def verify(rdir):
     """Deliberately THIN: local dangling-anchor + tamper(rehash) check + low-quality-citation WARNING.
     NOT the farm gate (which does byte-in-quote semantic grounding). The real seal is the farm bridge."""
@@ -582,10 +781,24 @@ def verify(rdir):
             hosts.discard("")
             if len(hosts) < 2:
                 fake_corrob.append(f["artifact_id"])
+    # Rank-6 sufficiency grades (advisory; folded ONLY when >=1 declared standard exists; ok UNCHANGED)
+    cg = {}
+    if any(r.get("kind") == "standard" for r in rows):
+        latest_g = {}
+        for g in rows:
+            if g.get("kind") == "conclusion_grade":
+                latest_g[(g.get("conclusion_id"), g.get("standard_id"))] = g
+        sf = [{"conclusion_id": g["conclusion_id"], "reasons": g["shortfall_reasons"]}
+              for g in latest_g.values() if g["overall"] == "SHORTFALL"]
+        graded = {g["conclusion_id"] for g in latest_g.values()}
+        all_cids = {f.get("conclusion_id") for f in finds if f.get("conclusion_id")}
+        cg = {"n_graded": len(latest_g), "n_shortfall": len(sf),
+              "n_ungraded_conclusions": len(all_cids - graded), "shortfalls": sf}
     return {"ok": not dangling and not mismatch and not unverifiable, "dangling_anchors": dangling,
             "hash_mismatch": mismatch, "unverifiable": unverifiable, "low_quality_citations": low_q,
             "capture_errors": capture_errors, "fake_corroboration": list(dict.fromkeys(fake_corrob)),
-            "numeric_conflicts": _numeric_conflicts(finds), "open_at_stop": frontier_state(rdir)["open"]}
+            "numeric_conflicts": _numeric_conflicts(finds), "open_at_stop": frontier_state(rdir)["open"],
+            "conclusion_grades": cg}
 
 
 def farm_plan(rdir):
@@ -832,6 +1045,7 @@ def main():
     pf = sub.add_parser("finding"); pf.add_argument("rdir"); pf.add_argument("text"); pf.add_argument("label")
     pf.add_argument("artifact_id"); pf.add_argument("--quote", default=""); pf.add_argument("--locator", default="")
     pf.add_argument("--confidence", default="med"); pf.add_argument("--corroborated", nargs="*", default=[])
+    pf.add_argument("--conclusion", default="")
     po = sub.add_parser("frontier"); po.add_argument("rdir"); po.add_argument("op", choices=["open", "close", "note", "visit", "state"])
     po.add_argument("item", nargs="?", default=""); po.add_argument("--kind", default="question"); po.add_argument("--reason", default="")
     for c in ("verify", "digest", "plan"):
@@ -843,6 +1057,9 @@ def main():
     sub.add_parser("calib").add_argument("rdir")
     pm = sub.add_parser("measure"); pm.add_argument("rdir"); pm.add_argument("artifact_id")
     pm.add_argument("hyp_span"); pm.add_argument("truth_span")
+    ppub = sub.add_parser("published"); ppub.add_argument("rdir"); ppub.add_argument("artifact_id"); ppub.add_argument("published_at")
+    pstd = sub.add_parser("standard"); pstd.add_argument("rdir"); pstd.add_argument("--knobs", required=True, help="JSON object of declared knobs")
+    pgr = sub.add_parser("grade"); pgr.add_argument("rdir"); pgr.add_argument("conclusion_id"); pgr.add_argument("standard_id"); pgr.add_argument("--as-of", default=None, dest="as_of")
     a = ap.parse_args()
     if a.cmd == "open":
         print(os.path.basename(open_research(a.goal)))   # print the ASCII slug, not the Korean path
@@ -851,7 +1068,7 @@ def main():
     if a.cmd == "ingest":
         print(json.dumps(ingest(rd, a.target, a.note), ensure_ascii=False))
     elif a.cmd == "finding":
-        print(json.dumps(record_finding(rd, a.text, a.label, a.artifact_id, a.quote, a.locator, a.confidence, a.corroborated), ensure_ascii=False))
+        print(json.dumps(record_finding(rd, a.text, a.label, a.artifact_id, a.quote, a.locator, a.confidence, a.corroborated, a.conclusion), ensure_ascii=False))
     elif a.cmd == "frontier":
         if a.op == "state":
             print(json.dumps(frontier_state(rd), ensure_ascii=False))
@@ -877,6 +1094,12 @@ def main():
         print(json.dumps(calibration(rd), ensure_ascii=False))
     elif a.cmd == "measure":
         print(json.dumps(measure_capture_error(rd, a.artifact_id, a.hyp_span, a.truth_span), ensure_ascii=False))
+    elif a.cmd == "published":
+        print(json.dumps(set_published(rd, a.artifact_id, a.published_at), ensure_ascii=False))
+    elif a.cmd == "standard":
+        print(json.dumps(set_standard(rd, **json.loads(a.knobs)), ensure_ascii=False))
+    elif a.cmd == "grade":
+        print(json.dumps(grade_conclusion(rd, a.conclusion_id, a.standard_id, a.as_of), ensure_ascii=False))
 
 
 if __name__ == "__main__":
