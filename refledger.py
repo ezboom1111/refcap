@@ -580,9 +580,13 @@ def _numeric_conflicts(finds):
 # gyeongju threshold-tree). Grades SUFFICIENCY (enough recent, distinct-host, non-redundant, conflict-free
 # corroboration vs the DECLARED bar) - NEVER TRUTH (fabrication-at-capture stays the open roof).
 _STD_KNOBS = {"min_independent_sources", "min_distinct_hosts", "max_age_days", "min_dated_fraction",
-              "dup_similarity", "fatal_domains", "min_distinct_source_types"}
+              "dup_similarity", "fatal_domains", "min_distinct_source_types", "required_modalities"}
 _ARITHMETIC_DOMAINS = {"breadth", "recency", "consistency"}   # carried by math over hash-pinned bytes
-_GRADE_DOMAIN_NAMES = {"breadth", "recency", "consistency", "traceability", "source_type"}
+_GRADE_DOMAIN_NAMES = {"breadth", "recency", "consistency", "traceability", "source_type", "modality"}
+# Mechanical artifact-TYPE -> modality CLASS (by file type only, NOT content - same anti-gyeongju rule as detect_type).
+# Lets the agent DECLARE required_modalities so "4 web hosts" can't go MEETS while video/primary-doc coverage is 0.
+_MODALITY_CLASS = {"html": "web", "md": "web", "txt": "web", "json": "structured", "csv": "structured",
+                   "pdf": "document", "transcript": "av", "audio": "av", "video": "av", "image": "image"}
 _SHINGLE_K = 3   # FIXED (code-owned, NOT per-topic); only the dup_similarity CUTOFF is agent-declared
 
 
@@ -660,11 +664,14 @@ def set_standard(rdir, **knobs):
     elif fd is not None:
         if set(fd) - _GRADE_DOMAIN_NAMES:
             invalid.append("fatal_domains_unknown")         # a typo'd domain would force permanent UNKNOWN silently
-        if set(fd) <= {"traceability", "source_type"}:
+        if set(fd) <= {"traceability", "source_type", "modality"}:
             invalid.append("fatal_set_trivial")             # no arithmetic-carried domain => vacuous/unverified bar
     ds = knobs.get("dup_similarity")
     if ds is not None and not (0 < float(ds) <= 1):
         invalid.append("dup_similarity_range")
+    rm = knobs.get("required_modalities")
+    if rm is not None and (not isinstance(rm, list) or set(rm) - set(_MODALITY_CLASS.values())):
+        invalid.append("required_modalities_invalid")       # must be a list of known classes (web/structured/document/av/image)
     canon = json.dumps(knobs, ensure_ascii=False, sort_keys=True)
     row = {"kind": "standard", "standard_id": "std_" + sha256_bytes(canon.encode("utf-8"))[:12],
            "knobs": knobs, "invalid_fields": invalid, "ts": _now()}
@@ -755,6 +762,12 @@ def grade_conclusion(rdir, conclusion_id, standard_id, as_of=None):
     if mst is not None:
         ntypes = len({arts[a].get("type", "") for a in aset})
         domains["source_type"] = {"value": ntypes, "bar": mst, "met": (ntypes >= mst), "basis": "declared_unverified"}
+    rmod = knobs.get("required_modalities")
+    if isinstance(rmod, list) and rmod:                     # DECLARED modality coverage: each required CLASS must be present
+        present = sorted({_MODALITY_CLASS.get(arts[a].get("type", ""), "other") for a in aset})
+        missing = [m for m in rmod if m not in present]    # NOT a count - forces SPECIFIC classes (text-only can't pass)
+        domains["modality"] = {"value": {"present": present, "missing": missing}, "bar": {"required": sorted(set(rmod))},
+                               "met": (not missing), "basis": "declared_unverified"}
     _fd = knobs.get("fatal_domains")
     fatal = set(_fd) if isinstance(_fd, list) else set()   # malformed fatal_domains (non-list) -> UNGRADED (warned at declare)
     shortfall = sorted(d for d in fatal if domains.get(d, {}).get("met") is False)

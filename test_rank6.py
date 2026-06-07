@@ -261,5 +261,52 @@ class HardeningPass(unittest.TestCase):   # the adversarial python-reviewer pass
         self.assertEqual(g["overall"], "MEETS")
 
 
+class ModalityCoverage(unittest.TestCase):   # hole-b: declared modality coverage so text-only can't silently go MEETS
+    def setUp(self):
+        self.d = tempfile.mkdtemp(); self.r = R.open_research("g", base=self.d)
+
+    def tearDown(self):
+        shutil.rmtree(self.d, ignore_errors=True)
+
+    def _typed(self, src, typ):
+        p = os.path.join(self.r, "a_" + R.sha256_bytes(src.encode())[:8] + ".txt")
+        with open(p, "w", encoding="utf-8") as f:
+            f.write("evidence " + src)
+        return R.ledger_append(self.r, type=typ, source=src, method="m", path=p, canonical_path=p,
+                               sha256=R.sha256_file(p), quality_label="OK")
+
+    def test_text_only_fails_declared_modality_then_passes_when_covered(self):
+        for h in ("a.com", "b.com"):                                    # 2 web (html) sources -> breadth OK ...
+            art = self._typed("https://%s/x" % h, "html")
+            R.record_finding(self.r, "x", "OBSERVED", art["artifact_id"], quote=h, conclusion_id="C1")
+        sid = R.set_standard(self.r, min_independent_sources=2, required_modalities=["structured", "av"],
+                             fatal_domains=["breadth", "modality"])["standard_id"]
+        g = R.grade_conclusion(self.r, "C1", sid)
+        self.assertTrue(g["domains"]["breadth"]["met"])
+        self.assertFalse(g["domains"]["modality"]["met"])              # ... but structured+av absent -> blocked
+        self.assertEqual(set(g["domains"]["modality"]["value"]["missing"]), {"structured", "av"})
+        self.assertEqual(g["overall"], "SHORTFALL")
+        self.assertIn("modality", g["shortfall_reasons"])
+        for src, typ in (("https://data.go.kr/d", "json"), ("https://youtube.com/watch?v=1", "transcript")):
+            art = self._typed(src, typ)                                 # add a structured + an av source
+            R.record_finding(self.r, "x", "OBSERVED", art["artifact_id"], quote=src, conclusion_id="C1")
+        g2 = R.grade_conclusion(self.r, "C1", sid)
+        self.assertTrue(g2["domains"]["modality"]["met"])
+        self.assertEqual(g2["overall"], "MEETS")
+
+    def test_modality_alone_cannot_carry_meets_downgrade_only(self):
+        art = self._typed("https://data.go.kr/d", "json")
+        R.record_finding(self.r, "x", "OBSERVED", art["artifact_id"], quote="d", conclusion_id="C1")
+        std = R.set_standard(self.r, required_modalities=["structured"], fatal_domains=["modality"])
+        self.assertIn("fatal_set_trivial", std["invalid_fields"])      # no arithmetic-carried domain
+        g = R.grade_conclusion(self.r, "C1", std["standard_id"])
+        self.assertTrue(g["domains"]["modality"]["met"])
+        self.assertEqual(g["overall"], "UNGRADED")                     # downgrade-only: cannot certify alone
+
+    def test_required_modalities_validation(self):
+        self.assertIn("required_modalities_invalid", R.set_standard(self.r, required_modalities="structured")["invalid_fields"])
+        self.assertIn("required_modalities_invalid", R.set_standard(self.r, required_modalities=["bogus"])["invalid_fields"])
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

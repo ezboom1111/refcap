@@ -8,7 +8,8 @@
 - `min_independent_sources` = **물량**(붕괴 후 *독립* 소스 수) · `min_distinct_hosts` = 독립 도메인 수
 - `max_age_days` = **최신성**(가장 최신 발행물의 나이 상한; *생략 가능*) · `min_dated_fraction` = 날짜 보유 비율
 - `dup_similarity` = 신디케이트/복사본 붕괴 임계 · `min_distinct_source_types` = 소스 종류 다양성(html/json/transcript)
-- `fatal_domains` = **무엇이 치명(SHORTFALL을 강제)인가** = 너의 의도의 핵심 (breadth/recency/consistency/source_type)
+- `required_modalities` = **모달리티 커버리지 강제** = 선언한 *클래스가 각각* 존재해야 함 (web/structured/document/av/image). *카운트가 아니라 특정 클래스 요구* → **"웹 4개"로는 절대 통과 못 함**(영상·1차문서·정형이 0이면 SHORTFALL). 텍스트 편향을 코드가 막는 레버.
+- `fatal_domains` = **무엇이 치명(SHORTFALL을 강제)인가** = 너의 의도의 핵심 (breadth/recency/consistency/source_type/**modality**). modality·source_type은 *downgrade-only*(단독으론 MEETS 못 만듦 — 반드시 breadth 등 arithmetic 도메인과 함께).
 
 ---
 
@@ -55,6 +56,14 @@
 {"min_independent_sources":3,"min_distinct_hosts":3,"min_distinct_source_types":2,"max_age_days":90,"min_dated_fraction":0.5,"fatal_domains":["breadth","source_type"]}
 ```
 *언제*: 아이템 기획·콘셉트 발굴. *다양한 종류*의 소스(트렌드+리뷰+경쟁사)에서 넓게. source_type을 치명으로 = 한 우물만 파는 걸 막음.
+
+## 8. ★ primary-source / institutional — 1차자료·기관 리서치 (모달리티 커버리지 강제)
+```json
+{"min_independent_sources":3,"min_distinct_hosts":3,"required_modalities":["structured","document"],"fatal_domains":["breadth","modality"]}
+```
+*언제*: 정부·공공기관·1차자료가 핵심인 조사 (정책, 기관 성과, 연구비/과제 DB, 통계). **`required_modalities`로 정형(structured: 정부 CSV/JSON/API)+1차문서(document: PDF 공시·요강)를 *강제***. 뉴스/블로그(web)만으로는 breadth가 차도 modality SHORTFALL → *2차 텍스트로 슬쩍 후퇴 불가*. 영상 증언이 핵심이면 `"av"` 추가.
+- *왜*: 내(에이전트)가 텍스트/웹서치로 만족하고 멈추는 편향을 **게이트가 강제로 막음** — 1차 정형/문서가 0이면 초록불이 안 뜬다.
+- *벽=공개*: 1차 모달리티가 JS/로그인 벽에 막히면 그 클래스가 `missing`으로 남아 modality SHORTFALL → 커버리지 구멍이 *가시화*된다(은밀한 2차 후퇴가 grade에 드러남). 벽은 라벨(BOT_WALL/LOGIN)로 보존하고 video-heavy/OCR로 우회.
 
 ---
 
