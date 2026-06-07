@@ -247,6 +247,19 @@ class HardeningPass(unittest.TestCase):   # the adversarial python-reviewer pass
         flat = {w for sh in R._shingles("growth according margin between revenue") for w in sh}
         self.assertFalse(flat & R._EN_STOP)                          # no _EN_STOP filler survives into the shingles
 
+    def test_host_ip_literals_not_collapsed_by_etld(self):   # stress G2#009: 1.2.3.4 & 9.8.3.4 are distinct origins
+        self.assertEqual(R._host("https://1.2.3.4/p"), "1.2.3.4")               # IP returned whole, not last-2-labels
+        self.assertNotEqual(R._host("https://1.2.3.4/p"), R._host("https://9.8.3.4/p"))   # was: both -> '3.4' (collapse)
+        self.assertNotEqual(R._host("http://[2001:db8::1]/p"), R._host("http://[2001:db8::2]/p"))   # IPv6 distinct
+
+    def test_decimal_int_same_value_not_false_conflict(self):   # stress G4#044: 3.0 == 3 numerically -> NOT a conflict
+        a, b = _art(self.r, "https://a.com/1"), _art(self.r, "https://b.com/2")
+        R.record_finding(self.r, "x", "OBSERVED", a["artifact_id"], quote="discount interest 3.0 fixed", conclusion_id="C1")
+        R.record_finding(self.r, "x", "OBSERVED", b["artifact_id"], quote="discount interest 3 fixed", conclusion_id="C1")
+        g = R.grade_conclusion(self.r, "C1", R.set_standard(self.r, fatal_domains=["consistency"])["standard_id"])
+        self.assertTrue(g["domains"]["consistency"]["met"])     # display formatting (3.0 vs 3) is not a disagreement
+        self.assertEqual(g["overall"], "MEETS")
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

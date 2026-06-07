@@ -515,6 +515,10 @@ def _host(url):
     h = (urllib.parse.urlparse(str(url)).hostname or "").lower()
     if h.startswith("www."):
         h = h[4:]
+    try:
+        return ipaddress.ip_address(h).compressed   # raw IP literal: eTLD+1 is meaningless (1.2.3.4 != 9.8.3.4)
+    except ValueError:
+        pass
     parts = h.split(".")
     if len(parts) <= 2:
         return h
@@ -522,6 +526,18 @@ def _host(url):
 
 
 _NUM_RE = re.compile(r"\d+(?:,\d{3})*(?:\.\d+)?")   # comma only as a thousands group (so '1,2,3' = three numbers)
+
+
+def _canon_num(tok):
+    """Canonical numeric VALUE so 3.0==3 and 1,234==1234 (display formatting != a real disagreement); whole values
+    render without a trailing .0 (9900 stays '9900'). Falls back to the raw (comma-stripped) string if unparseable.
+    Mechanical normalization only; the agent adjudicates."""
+    t = tok.replace(",", "")
+    try:
+        f = float(t)
+        return str(int(f)) if f == int(f) else repr(f)
+    except (ValueError, OverflowError):
+        return t
 _CJK_STOP = {"입니다", "이다", "한다", "합니다", "됩니다", "있다", "없다", "에서", "에게", "으로", "이고",
              "이며", "하는", "했다", "된다", "이라", "라고", "까지", "부터", "처럼", "보다", "예요", "에요",
              "이에요", "그리고", "하지만", "그러나", "또는", "이런", "저런", "그런"}
@@ -538,7 +554,7 @@ def _numeric_conflicts(finds):
     is kept narrow (shared entity token + differing numbers) to avoid the cry-wolf nag the threshold-tree died of."""
     def toks(f):
         s = f.get("quote") or ""        # the VERBATIM bytes only (not the agent's claim text, which can share
-        nums = {n.replace(",", "") for n in _NUM_RE.findall(s)}   # a category label and false-flag distinct metrics)
+        nums = {_canon_num(n) for n in _NUM_RE.findall(s)}        # a category label and false-flag distinct metrics)
         words = set()
         for w in re.findall(r"[^\W\d_]{2,}", s, re.UNICODE):
             wl = w.lower()
