@@ -303,7 +303,7 @@ def ledger_append(rdir, **row):
         return art
 
 
-def record_finding(rdir, text, label, artifact_id, quote="", locator="", confidence="med", corroborated_by=None, conclusion_id=""):
+def record_finding(rdir, text, label, artifact_id, quote="", locator="", confidence="med", corroborated_by=None, conclusion_id="", hypothesis_id="", polarity=""):
     """Local cite-or-fail: a finding MUST anchor to a registered artifact, else refuse.
     `quote` = the VERBATIM span from the artifact that grounds the claim (NOT the claim text - the farm
     gate rejects a claim whose anchor text is not literally in the cited bytes; learned e2e). `locator` =
@@ -318,8 +318,11 @@ def record_finding(rdir, text, label, artifact_id, quote="", locator="", confide
     for aid in cb:
         if aid not in ids:
             raise ValueError(f"dangling corroboration: artifact_id {aid!r} not in ledger")
+    if polarity not in ("", "confirms", "disconfirms", "neutral"):   # Rank-7: a signal's stance toward a thesis
+        raise ValueError(f"polarity must be confirms/disconfirms/neutral, got {polarity!r}")
     f = {"kind": "finding", "artifact_id": artifact_id, "text": text, "label": label, "quote": quote,
-         "locator": locator, "confidence": confidence, "corroborated_by": cb, "conclusion_id": conclusion_id, "ts": _now()}
+         "locator": locator, "confidence": confidence, "corroborated_by": cb, "conclusion_id": conclusion_id,
+         "hypothesis_id": hypothesis_id, "polarity": polarity, "ts": _now()}
     _append_jsonl(path, f)
     return f
 
@@ -376,7 +379,7 @@ def frontier_state(rdir):
 _OUTCOMES = {"hit", "miss", "unresolved"}
 
 
-def predict(rdir, claim, confidence, resolve_by, operator="", anchor_artifact_id="", conclusion_id=""):
+def predict(rdir, claim, confidence, resolve_by, operator="", anchor_artifact_id="", conclusion_id="", hypothesis_id=""):
     """Record a FALSIFIABLE forecast. confidence in [0,1] = stated P(claim is true). resolve_by = the date
     by which reality should settle it. operator = the falsifiable condition (e.g. peaks_within / price_lte /
     count_gte). anchor_artifact_id (optional) = the basis evidence at forecast time (validated vs the ledger
@@ -397,7 +400,7 @@ def predict(rdir, claim, confidence, resolve_by, operator="", anchor_artifact_id
     pid = "p_" + sha256_bytes(f"{claim}|{operator}|{resolve_by}|{now}|{os.urandom(8).hex()}".encode("utf-8"))[:12]
     row = {"kind": "prediction", "prediction_id": pid, "claim": claim, "stated_confidence": c,
            "resolve_by": resolve_by, "operator": operator, "anchor_artifact_id": anchor_artifact_id,
-           "conclusion_id": conclusion_id, "created": now}   # conclusion_id = the future grade_validity join key
+           "conclusion_id": conclusion_id, "hypothesis_id": hypothesis_id, "created": now}   # join keys: grade_validity + alpha thesis
     _append_jsonl(os.path.join(rdir, "predictions.jsonl"), row)
     return row
 
@@ -788,6 +791,55 @@ def grade_conclusion(rdir, conclusion_id, standard_id, as_of=None):
              "sufficiency_not_truth": True, "recency_basis": "declared_date_unverified", "ts": _now()}
     _append_jsonl(os.path.join(rdir, "ledger.jsonl"), grade)
     return grade
+
+
+# ---- Rank-7 ALPHA layer: thesis + weak-signal TRIANGULATION (assemble fragments others don't) ---------------
+# Alpha = a non-obvious inference where MANY weak signals converge though no single source states it. A hypothesis
+# is the agent's falsifiable THESIS; signals are just findings tagged hypothesis_id + polarity (no new noun). The
+# agent ties a predict() to the thesis (so the bet is later resolved = non-circular). triangulate() REPORTS
+# independent convergence (distinct host AND modality) - it NEVER judges "is this alpha" or sets a threshold; that
+# judgment, the why-hidden, and the decay stay the agent's (code persists nouns + counts, like every other rank).
+def set_hypothesis(rdir, thesis, signature="", decay=""):
+    """DECLARE a falsifiable alpha thesis. signature = the pattern in words; decay = why-hidden / when it stops
+    being edge. NOUN only (the inference + resolution are the agent's, via tagged signals + a tied predict())."""
+    if not str(thesis).strip():
+        raise ValueError("thesis must be non-empty")
+    hid = "hyp_" + sha256_bytes(str(thesis).encode("utf-8"))[:12]
+    row = {"kind": "hypothesis", "hypothesis_id": hid, "thesis": thesis, "signature": signature,
+           "decay": decay, "ts": _now()}
+    _append_jsonl(os.path.join(rdir, "ledger.jsonl"), row)
+    return row
+
+
+def triangulate(rdir, hypothesis_id):
+    """Reduce the SIGNALS (findings tagged this hypothesis_id) into INDEPENDENT convergence. REPORTS only: the alpha
+    core = how many CONFIRMING signals converge from DISTINCT eTLD+1 hosts AND distinct modality classes (the weak
+    fragments others don't assemble), netted against disconfirming. The agent decides if convergence is decisive +
+    estimates decay; code sets NO threshold (no brain-in-code)."""
+    rows = _read_jsonl(os.path.join(rdir, "ledger.jsonl"))
+    arts = {r["artifact_id"]: r for r in rows if r.get("kind") == "artifact"}
+    sig = [r for r in rows if r.get("kind") == "finding" and r.get("hypothesis_id") == hypothesis_id]
+
+    def _host_of(f):
+        return _host(arts[f["artifact_id"]].get("source", "")) if f.get("artifact_id") in arts else ""
+
+    def _mod_of(f):
+        return _MODALITY_CLASS.get(arts[f["artifact_id"]].get("type", ""), "other") if f.get("artifact_id") in arts else "other"
+
+    def _facets(pol):
+        fs = [f for f in sig if f.get("polarity") == pol]
+        hosts = {h for h in (_host_of(f) for f in fs) if h}
+        return fs, hosts, {_mod_of(f) for f in fs}
+
+    conf, chosts, cmods = _facets("confirms")
+    disc, dhosts, _ = _facets("disconfirms")
+    return {"hypothesis_id": hypothesis_id, "n_signals": len(sig),
+            "confirming": len(conf), "disconfirming": len(disc),
+            "independent_confirming_hosts": len(chosts), "confirming_modalities": sorted(cmods),
+            "independent_disconfirming_hosts": len(dhosts),
+            "net_independent": len(chosts) - len(dhosts),   # >0 = weak signals converge confirming (agent judges if decisive)
+            "signals": [{"text": f.get("text"), "polarity": f.get("polarity"), "artifact_id": f.get("artifact_id"),
+                         "host": _host_of(f), "modality": _mod_of(f)} for f in sig]}
 
 
 def verify(rdir):
