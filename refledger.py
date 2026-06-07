@@ -376,7 +376,7 @@ def frontier_state(rdir):
 _OUTCOMES = {"hit", "miss", "unresolved"}
 
 
-def predict(rdir, claim, confidence, resolve_by, operator="", anchor_artifact_id=""):
+def predict(rdir, claim, confidence, resolve_by, operator="", anchor_artifact_id="", conclusion_id=""):
     """Record a FALSIFIABLE forecast. confidence in [0,1] = stated P(claim is true). resolve_by = the date
     by which reality should settle it. operator = the falsifiable condition (e.g. peaks_within / price_lte /
     count_gte). anchor_artifact_id (optional) = the basis evidence at forecast time (validated vs the ledger
@@ -397,7 +397,7 @@ def predict(rdir, claim, confidence, resolve_by, operator="", anchor_artifact_id
     pid = "p_" + sha256_bytes(f"{claim}|{operator}|{resolve_by}|{now}|{os.urandom(8).hex()}".encode("utf-8"))[:12]
     row = {"kind": "prediction", "prediction_id": pid, "claim": claim, "stated_confidence": c,
            "resolve_by": resolve_by, "operator": operator, "anchor_artifact_id": anchor_artifact_id,
-           "created": now}
+           "conclusion_id": conclusion_id, "created": now}   # conclusion_id = the future grade_validity join key
     _append_jsonl(os.path.join(rdir, "predictions.jsonl"), row)
     return row
 
@@ -438,11 +438,14 @@ def calibration(rdir):
         if r.get("kind") == "resolution" and r.get("prediction_id") in preds:
             latest[r["prediction_id"]] = r
     resolved = []                                # (p, y, anchored) over hit/miss only
+    n_premature = 0                              # resolved at/before the forecast was made = not a future oracle (toy/smoke)
     for pid, p in preds.items():
         res = latest.get(pid)
         if not res or res.get("outcome") not in ("hit", "miss"):
             continue
-        y = 1.0 if res["outcome"] == "hit" else 0.0
+        if res.get("ts", "") <= p.get("created", ""):   # instant resolution (ts<=created) = suspect non-oracle (toy/smoke);
+            n_premature += 1                            # ADVISORY only - NOT excluded from Brier. Code reports the mechanical
+        y = 1.0 if res["outcome"] == "hit" else 0.0     # fact; the AGENT discounts it when judging readiness (don't-code-the-brain).
         resolved.append((float(p.get("stated_confidence", 0.0)), y, bool(res.get("anchored"))))
 
     def _brier(rs):
@@ -459,7 +462,7 @@ def calibration(rdir):
                             "hit_rate": round(hr, 3), "gap": round(abs(mc - hr), 3)})
     ba, banch = _brier(resolved), _brier([r for r in resolved if r[2]])
     n = len(preds)
-    return {"n_predictions": n, "n_resolved": len(resolved),
+    return {"n_predictions": n, "n_resolved": len(resolved), "n_premature": n_premature,
             "resolution_rate": round(len(resolved) / n, 3) if n else 0.0,
             "brier_all": ba, "brier_anchored": banch,
             "brier_divergence": (round(ba - banch, 4) if (ba is not None and banch is not None) else None),
@@ -579,8 +582,8 @@ def _shingles(text):
     # word K-gram shingles of the quote bytes for near-DUPLICATE (string near-identity, NOT semantic similarity).
     toks = []
     for w in re.findall(r"[^\W\d_]{2,}", (text or "").lower(), re.UNICODE):
-        if w in _CJK_STOP:
-            continue
+        if w in _CJK_STOP or w in _EN_STOP:   # MUST match _numeric_conflicts.toks (else EN fillers inflate Jaccard
+            continue                          # -> false near-dup -> falsely collapses independent sources -> corrupts breadth)
         if not w.isascii() or len(w) >= 4:
             toks.append(w)
     if len(toks) < _SHINGLE_K:
@@ -724,6 +727,9 @@ def grade_conclusion(rdir, conclusion_id, standard_id, as_of=None):
             rec_val["freshest_age_days"] = min(ages)
             recency_met = min(ages) <= max_age
     recency = {"value": rec_val, "bar": {"max_age_days": max_age, "min_dated_fraction": knobs.get("min_dated_fraction")}, "met": recency_met}
+    # CARVE-OUT (documented exception to RANK6_SPEC's "omit knob => UNGRADED"): consistency + traceability have NO
+    # agent-tunable knob, so they compute UNCONDITIONALLY (bar:None, hard met) unlike the guarded breadth/recency/
+    # source_type. They only affect `overall` if the agent lists them in fatal_domains.
     conf = _numeric_conflicts(supports)
     consistency = {"value": {"conflicts": len(conf)}, "bar": None, "met": (len(conf) == 0)}
     trace_ok = bool(aset) and all(arts[a].get("sha256") for a in aset)

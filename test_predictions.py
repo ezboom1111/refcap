@@ -27,6 +27,11 @@ class PredictBasics(unittest.TestCase):
         rows = R._read_jsonl(os.path.join(self.r, "predictions.jsonl"))
         self.assertEqual(len([x for x in rows if x["kind"] == "prediction"]), 1)
 
+    def test_predict_carries_optional_conclusion_id_join_key(self):
+        # conclusion_id = the future grade_validity join key (zero-migration optional field; default "")
+        self.assertEqual(R.predict(self.r, "x", 0.5, "2026-12-31", conclusion_id="C7")["conclusion_id"], "C7")
+        self.assertEqual(R.predict(self.r, "y", 0.5, "2026-12-31")["conclusion_id"], "")
+
     def test_confidence_out_of_range_rejected(self):
         for bad in (1.5, -0.1, "abc"):
             with self.assertRaises(ValueError):
@@ -163,6 +168,17 @@ class EdgeCases(unittest.TestCase):   # gaps the adversarial python-reviewer fla
         c = R.calibration(self.r)
         self.assertEqual(c["n_resolved"], 0)
         self.assertIsNone(c["brier_all"])
+
+    def test_instant_resolution_flagged_premature_but_not_dropped(self):
+        # a resolution stamped at/before the forecast was created (same-second toy/smoke) is a suspect non-oracle:
+        # calibration surfaces n_premature (ADVISORY) but does NOT silently drop it - the AGENT judges readiness.
+        p = R.predict(self.r, "x will happen by year end", 0.8, "2026-12-31")
+        R._append_jsonl(os.path.join(self.r, "predictions.jsonl"),
+                        {"kind": "resolution", "prediction_id": p["prediction_id"], "outcome": "hit",
+                         "evidence_artifact": "", "anchored": False, "ts": p["created"]})   # same-second = instant
+        c = R.calibration(self.r)
+        self.assertEqual(c["n_premature"], 1)
+        self.assertEqual(c["n_resolved"], 1)        # advisory, not excluded from the count/Brier
 
     def test_all_unanchored_divergence_is_none(self):
         a = R.predict(self.r, "a", 0.9, "d"); R.resolve(self.r, a["prediction_id"], "hit")

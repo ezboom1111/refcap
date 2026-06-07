@@ -238,6 +238,15 @@ class HardeningPass(unittest.TestCase):   # the adversarial python-reviewer pass
         self.assertIn("fatal_domains_not_list", std["invalid_fields"])
         self.assertEqual(R.grade_conclusion(self.r, "C1", std["standard_id"])["overall"], "UNGRADED")   # no crash
 
+    def test_shingles_drops_en_stop_so_fillers_dont_inflate_near_dup(self):
+        # REGRESSION: _shingles once dropped the _EN_STOP filter that _numeric_conflicts.toks applies -> EN fillers
+        # inflated near-dup Jaccard -> falsely collapsed INDEPENDENT sources -> understated breadth (the opposite of
+        # intent). Same content words + different fillers MUST give identical shingles; no filler may survive.
+        self.assertEqual(R._shingles("revenue according between growth margin which during"),
+                         R._shingles("revenue growth margin"))      # fillers stripped; content words & order identical
+        flat = {w for sh in R._shingles("growth according margin between revenue") for w in sh}
+        self.assertFalse(flat & R._EN_STOP)                          # no _EN_STOP filler survives into the shingles
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
