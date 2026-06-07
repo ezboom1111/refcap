@@ -507,8 +507,9 @@ def measure_capture_error(rdir, artifact_id, hyp_span, truth_span):
     return row
 
 
-_MULTI_SUFFIX = {"co.kr", "or.kr", "ne.kr", "go.kr", "re.kr", "pe.kr", "co.uk", "org.uk", "ac.uk",
-                 "co.jp", "ne.jp", "or.jp", "go.jp", "com.au", "com.cn", "com.br", "co.in", "co.nz"}
+_MULTI_SUFFIX = {"co.kr", "or.kr", "ne.kr", "go.kr", "re.kr", "pe.kr", "ac.kr",   # ac.kr = ALL KR universities (critical:
+                 "co.uk", "org.uk", "ac.uk", "co.jp", "ne.jp", "or.jp", "go.jp", "ac.jp",  # else snu.ac.kr/kaist.ac.kr -> "ac.kr")
+                 "com.au", "com.cn", "com.br", "co.in", "co.nz"}
 
 
 def _host(url):

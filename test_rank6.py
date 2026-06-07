@@ -252,6 +252,11 @@ class HardeningPass(unittest.TestCase):   # the adversarial python-reviewer pass
         self.assertNotEqual(R._host("https://1.2.3.4/p"), R._host("https://9.8.3.4/p"))   # was: both -> '3.4' (collapse)
         self.assertNotEqual(R._host("http://[2001:db8::1]/p"), R._host("http://[2001:db8::2]/p"))   # IPv6 distinct
 
+    def test_korean_academic_hosts_not_collapsed(self):   # USE-found (alpha e2e): .ac.kr universities must stay distinct
+        self.assertEqual(R._host("https://engineering.chosun.ac.kr/x"), "chosun.ac.kr")   # was -> "ac.kr" (ac.kr missing)
+        self.assertNotEqual(R._host("https://snu.ac.kr/x"), R._host("https://kaist.ac.kr/x"))    # 2 universities = 2 origins
+        self.assertEqual(R._host("https://cse.snu.ac.kr/x"), R._host("https://ee.snu.ac.kr/x"))  # same-univ subdomains collapse
+
     def test_decimal_int_same_value_not_false_conflict(self):   # stress G4#044: 3.0 == 3 numerically -> NOT a conflict
         a, b = _art(self.r, "https://a.com/1"), _art(self.r, "https://b.com/2")
         R.record_finding(self.r, "x", "OBSERVED", a["artifact_id"], quote="discount interest 3.0 fixed", conclusion_id="C1")

@@ -30,3 +30,6 @@ Thumbs.db
 _stress/
 _smoke.jsonl
 _stress_mismatches.txt
+_gradgem_report.md
+_alpha_report.md
+_alpha_demo_out.json
