@@ -26,26 +26,31 @@ fragments others do not combine. The edge is in the ASSEMBLY. Use this when "the
 answer" and the real pick is hidden in scattered public records.
 
 ## The loop (general — parameterize by thesis, not keywords)
-1. **Declare a falsifiable THESIS** (`set_hypothesis`): the SIGNATURE of the hidden X ("hidden powerhouse =
-   {public signal A + B + C converge non-obviously}"). E.g. labs/companies/researchers/trends — any domain.
+1. **Declare a falsifiable THESIS** (`set_hypothesis ... --stakes low|med|high`): the SIGNATURE of the hidden X
+   ("hidden powerhouse = {public signal A + B + C converge non-obviously}"). E.g. labs/companies/researchers/
+   trends — any domain. **Declare `--stakes` up front — it gates EFFORT, not modality** (stakes contract invariant):
+   a `high` thesis the digest later finds at RECON shape gets a loud EFFORT-SHORTFALL warning.
 2. **Gather WEAK public signals** by signal-type (see taxonomy), each `record_finding(hypothesis_id, polarity=
    confirms|disconfirms|neutral)` with a verbatim quote (cite-or-fail). Individually unconvincing is fine.
 3. **`triangulate(hypothesis_id)`** — REPORTS independent convergence (distinct host AND modality among confirming
-   signals, netted against disconfirming). YOU judge if it's decisive; code sets no threshold.
+   signals, netted against disconfirming) + `confirming_distinct_claims` (string-near-identical echoes collapsed —
+   copy-paste of one signal from 2 hosts ≠ 2 independent claims). YOU judge if it's decisive; code sets no threshold.
 4. **Register a FALSIFIABLE `predict(hypothesis_id, ..., resolve_by)`** — the preemptive bet, resolved by a future
-   public outcome. This is what makes it alpha (early + falsifiable) and seeds grade_validity (N→20).
+   public outcome. This is what makes it alpha (early + falsifiable) and seeds grade_validity (N→20). Don't double-
+   submit: a same-deadline near-IDENTICAL re-`predict` is auto-FLAGGED `near_duplicate_of` and excluded from the
+   digest's `distinct` count (a re-forecast with a *different* `resolve_by` is genuine, not a dup).
 5. **Refine / iterate** — open leads + missing legs via `frontier_open(hypothesis_id)`; next pass adds more PUBLIC
    fragments → re-run `triangulate` → convergence GROWS or a leg gets cleanly DISCONFIRMED. Keep digging.
 
 ## Invocation (refcap CLI — the loop is fully shell-drivable)
 ```bash
 SLUG=$(python refledger.py open "<investigation goal>")
-HID=$(python refledger.py hypothesis $SLUG "<thesis>" --signature "<pattern>" --decay "<why-hidden/when-decays>" | jq -r .hypothesis_id)
+HID=$(python refledger.py hypothesis $SLUG "<thesis>" --signature "<pattern>" --decay "<why-hidden/when-decays>" --stakes high | jq -r .hypothesis_id)
 # ingest a PUBLIC source -> register -> tag a weak signal to the thesis:
 python refledger.py finding $SLUG "<signal>" OBSERVED $AID --quote "<verbatim>" --hypothesis $HID --polarity confirms
-python refledger.py triangulate $SLUG $HID          # independent convergence REPORT (distinct host AND modality)
+python refledger.py triangulate $SLUG $HID          # convergence REPORT (distinct host AND modality + distinct_claims)
 python refledger.py predict $SLUG "<falsifiable claim>" 0.6 --by 2027-06-30 --hypothesis $HID
-python refledger.py digest $SLUG                     # SUMMARY.md surfaces 가설+삼각측량+예측
+python refledger.py digest $SLUG                     # SUMMARY.md surfaces 가설+삼각측량+예측 + an ALPHA/RECON stamp
 ```
 Then seal the load-bearing PUBLIC bytes through the farm cite-or-fail gate (browser-agent-mcp-farm).
 
@@ -67,3 +72,13 @@ Then seal the load-bearing PUBLIC bytes through the farm cite-or-fail gate (brow
   dig next" = YOU. No threshold in code.
 - **Continuous = the validation engine.** Every pick registers a `predict`; resolving them over weeks/months is how
   the system earns the right to claim its alpha is real (grade_validity at N≥20).
+- **Stakes gate EFFORT; recon ≠ alpha.** The digest stamps each thesis **ALPHA** or **RECON** mechanically from the
+  alpha layer's OWN definition (≥2 modalities, no echoed claims, net independent convergence, ≥1 falsifiable
+  predict). A single-modality 1-pass scrape of a *published roundup* is **RECON, not alpha** — the digest says so,
+  and at `--stakes high` it adds an EFFORT-SHORTFALL warning. Do NOT label a low-effort recon as an alpha pick.
+  (This is why the real failure mode is rarely "input grade too low" and usually **stopping at pass 1 + an obvious
+  thesis** — a roundup article titled "…총정리" is the OPPOSITE of an assembled-from-fragments edge.)
+- **Don't out-volume / out-polish a weak input.** A fired cite-or-fail gate on a low-grade page (gate=OK on a news
+  headline) certifies the quote exists, NOT that it's authoritative — it makes weak look verified. For a `high`
+  stakes pick, escalate to the structured-authority modality (NTIS/DART/공시/PDF) before sealing, don't pad the
+  news leg. The conclusion's grade = the grade of its load-bearing input; more findings/words can't raise it.

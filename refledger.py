@@ -387,7 +387,9 @@ def predict(rdir, claim, confidence, resolve_by, operator="", anchor_artifact_id
     """Record a FALSIFIABLE forecast. confidence in [0,1] = stated P(claim is true). resolve_by = the date
     by which reality should settle it. operator = the falsifiable condition (e.g. peaks_within / price_lte /
     count_gte). anchor_artifact_id (optional) = the basis evidence at forecast time (validated vs the ledger
-    if given). Append-only, no dedupe (a re-forecast is a new prediction)."""
+    if given). Append-only: a genuine re-forecast (same claim, DIFFERENT resolve_by) is preserved as a new row.
+    An accidental near-IDENTICAL re-submit (same claim+resolve_by+hypothesis) is FLAGGED via near_duplicate_of
+    (advisory) but NOT dropped — so "predict N" can't silently inflate (the real hidden-gem-natl bug)."""
     try:
         c = float(confidence)
     except (TypeError, ValueError):
@@ -400,11 +402,22 @@ def predict(rdir, claim, confidence, resolve_by, operator="", anchor_artifact_id
             raise ValueError(f"dangling anchor: artifact_id {anchor_artifact_id!r} not in ledger")
     now = _now()
     # collision-proof id via urandom (NOT a pre-read filesize, which TOCTOU-races under concurrent predicts).
-    # predictions are append-only with NO dedupe, so the id need not be stable/derived (unlike artifact ids).
+    # predictions stay append-only, so the id need not be stable/derived (unlike artifact ids).
     pid = "p_" + sha256_bytes(f"{claim}|{operator}|{resolve_by}|{now}|{os.urandom(8).hex()}".encode("utf-8"))[:12]
+    # ADVISORY near-duplicate flag: a same-deadline + same-hypothesis re-submit whose claim is near-IDENTICAL to an
+    # earlier one (3-gram Jaccard >= cutoff). FLAG only — the row is still appended (a different resolve_by => genuine
+    # re-forecast => not flagged). Surfaces the inflation that made hidden-gem-natl report "predict 3" for a true 2.
+    dup_of = ""
+    sc = _shingles(claim)
+    for r in _read_jsonl(os.path.join(rdir, "predictions.jsonl")):
+        if (r.get("kind") == "prediction" and r.get("resolve_by") == resolve_by
+                and r.get("hypothesis_id", "") == hypothesis_id
+                and _jaccard(sc, _shingles(r.get("claim", ""))) >= _NEAR_DUP_SIM):
+            dup_of = r["prediction_id"]; break
     row = {"kind": "prediction", "prediction_id": pid, "claim": claim, "stated_confidence": c,
            "resolve_by": resolve_by, "operator": operator, "anchor_artifact_id": anchor_artifact_id,
-           "conclusion_id": conclusion_id, "hypothesis_id": hypothesis_id, "created": now}   # join keys: grade_validity + alpha thesis
+           "conclusion_id": conclusion_id, "hypothesis_id": hypothesis_id, "near_duplicate_of": dup_of,
+           "created": now}   # join keys: grade_validity + alpha thesis
     _append_jsonl(os.path.join(rdir, "predictions.jsonl"), row)
     return row
 
@@ -469,7 +482,8 @@ def calibration(rdir):
                             "hit_rate": round(hr, 3), "gap": round(abs(mc - hr), 3)})
     ba, banch = _brier(resolved), _brier([r for r in resolved if r[2]])
     n = len(preds)
-    return {"n_predictions": n, "n_resolved": len(resolved), "n_premature": n_premature,
+    return {"n_predictions": n, "n_distinct_predictions": _distinct_pred_count(preds.values()),
+            "n_resolved": len(resolved), "n_premature": n_premature,
             "resolution_rate": round(len(resolved) / n, 3) if n else 0.0,
             "brier_all": ba, "brier_anchored": banch,
             "brier_divergence": (round(ba - banch, 4) if (ba is not None and banch is not None) else None),
@@ -596,6 +610,11 @@ _GRADE_DOMAIN_NAMES = {"breadth", "recency", "consistency", "traceability", "sou
 _MODALITY_CLASS = {"html": "web", "md": "web", "txt": "web", "json": "structured", "csv": "structured",
                    "pdf": "document", "transcript": "av", "audio": "av", "video": "av", "image": "image"}
 _SHINGLE_K = 3   # FIXED (code-owned, NOT per-topic); only the dup_similarity CUTOFF is agent-declared
+_NEAR_DUP_SIM = 0.6   # ADVISORY near-IDENTITY cutoff (3-gram Jaccard) for distinct-counts + duplicate FLAGS.
+                      # ADVISORY ONLY: it annotates/counts, NEVER gates a grade (grade collapse still uses the
+                      # agent-declared dup_similarity — no hidden bar there). Catches accidental copy-paste
+                      # re-submits; measured on the real hidden-gem-natl bug the dup pair scored 0.73 while
+                      # genuinely-distinct forecasts scored 0.00, so 0.6 separates them with a wide margin.
 
 
 def _parse_date(s):
@@ -640,6 +659,35 @@ def _uf_components(items, edges):
             lo, hi = (ra, rb) if ra < rb else (rb, ra)
             parent[hi] = lo
     return len({find(x) for x in items})
+
+
+def _distinct_text_count(texts, tau=_NEAR_DUP_SIM):
+    """ADVISORY count of DISTINCT items after collapsing near-IDENTICAL strings (union-find on 3-gram Jaccard).
+    String near-identity hygiene (copy-paste echoes), NOT semantic dedup — paraphrase/semantic overlap stays the
+    AGENT's call (don't-code-the-brain). Order-independent. Used only for surfaced counts, never to gate a grade."""
+    items = list(range(len(texts)))
+    if not items:
+        return 0
+    shg = {i: _shingles(texts[i]) for i in items}
+    edges = [(i, j) for i in items for j in items if i < j and _jaccard(shg[i], shg[j]) >= tau]
+    return _uf_components(items, edges)
+
+
+def _distinct_pred_count(preds):
+    """DISTINCT predictions after collapsing near-IDENTICAL claims within the SAME (resolve_by, hypothesis) group
+    — a genuine re-forecast with a DIFFERENT deadline stays distinct. ADVISORY count, order-independent. `preds` is
+    an iterable of prediction rows. Same rule as predict()'s near_duplicate_of flag, recomputed so it also catches
+    rows written before the flag existed (back-compat)."""
+    pl = list(preds)
+    idx = list(range(len(pl)))
+    if not idx:
+        return 0
+    shg = {i: _shingles(pl[i].get("claim", "")) for i in idx}
+    edges = [(i, j) for i in idx for j in idx if i < j
+             and pl[i].get("resolve_by") == pl[j].get("resolve_by")
+             and pl[i].get("hypothesis_id", "") == pl[j].get("hypothesis_id", "")
+             and _jaccard(shg[i], shg[j]) >= _NEAR_DUP_SIM]
+    return _uf_components(idx, edges)
 
 
 def set_published(rdir, artifact_id, published_at):
@@ -804,14 +852,18 @@ def grade_conclusion(rdir, conclusion_id, standard_id, as_of=None):
 # agent ties a predict() to the thesis (so the bet is later resolved = non-circular). triangulate() REPORTS
 # independent convergence (distinct host AND modality) - it NEVER judges "is this alpha" or sets a threshold; that
 # judgment, the why-hidden, and the decay stay the agent's (code persists nouns + counts, like every other rank).
-def set_hypothesis(rdir, thesis, signature="", decay=""):
+def set_hypothesis(rdir, thesis, signature="", decay="", stakes=""):
     """DECLARE a falsifiable alpha thesis. signature = the pattern in words; decay = why-hidden / when it stops
-    being edge. NOUN only (the inference + resolution are the agent's, via tagged signals + a tied predict())."""
+    being edge. stakes (''/low/med/high) = the agent's declared importance — it gates EFFORT, not modality: a
+    high-stakes thesis that the digest finds at RECON shape (single-modality / echoed / no prediction) gets a loud
+    EFFORT-SHORTFALL warning. NOUN only (the inference + resolution are the agent's, via tagged signals + predict())."""
     if not str(thesis).strip():
         raise ValueError("thesis must be non-empty")
-    hid = "hyp_" + sha256_bytes(str(thesis).encode("utf-8"))[:12]
+    if stakes not in ("", "low", "med", "high"):
+        raise ValueError(f"stakes must be one of low/med/high (or '' = unspecified), got {stakes!r}")
+    hid = "hyp_" + sha256_bytes(str(thesis).encode("utf-8"))[:12]    # id = thesis hash only (stakes is mutable metadata)
     row = {"kind": "hypothesis", "hypothesis_id": hid, "thesis": thesis, "signature": signature,
-           "decay": decay, "ts": _now()}
+           "decay": decay, "stakes": stakes, "ts": _now()}
     _append_jsonl(os.path.join(rdir, "ledger.jsonl"), row)
     return row
 
@@ -840,11 +892,41 @@ def triangulate(rdir, hypothesis_id):
     disc, dhosts, _ = _facets("disconfirms")
     return {"hypothesis_id": hypothesis_id, "n_signals": len(sig),
             "confirming": len(conf), "disconfirming": len(disc),
+            # distinct CLAIMS after collapsing near-IDENTICAL signal text (copy-paste echoes from >1 host inflate the
+            # raw confirming count without adding independent information). Advisory; semantic paraphrase is the agent's.
+            "confirming_distinct_claims": _distinct_text_count([f.get("text", "") for f in conf]),
+            "disconfirming_distinct_claims": _distinct_text_count([f.get("text", "") for f in disc]),
             "independent_confirming_hosts": len(chosts), "confirming_modalities": sorted(cmods),
             "independent_disconfirming_hosts": len(dhosts),
             "net_independent": len(chosts) - len(dhosts),   # >0 = weak signals converge confirming (agent judges if decisive)
             "signals": [{"text": f.get("text"), "polarity": f.get("polarity"), "artifact_id": f.get("artifact_id"),
                          "host": _host_of(f), "modality": _mod_of(f)} for f in sig]}
+
+
+def alpha_label(tri, stakes="", distinct_predictions=None, raw_predictions=None):
+    """ADVISORY mechanical label: is a thesis at ALPHA grade, or only RECON? Derives PURELY from the alpha layer's
+    OWN definition (independent convergence across DISTINCT host AND modality, no echoed claims, a falsifiable
+    prediction registered) + the agent-declared `stakes`. Code REPORTS the shape + a label; the agent still judges.
+    `stakes` only sets how LOUD a shortfall is flagged (high-stakes recon = a warning; low-stakes recon = just named).
+    distinct_predictions / raw_predictions (optional) = the DISTINCT vs total predictions tied to this thesis (raw >
+    distinct => echoed re-submits). This is the structural fix for the hidden-gem-natl mislabel: a 1-modality
+    single-burst run gets stamped RECON, so a low-effort recon can no longer masquerade as alpha in the digest."""
+    reasons = []
+    nconf = tri.get("confirming", 0)
+    if len(tri.get("confirming_modalities", [])) < 2:
+        reasons.append("single-modality" if nconf else "no-confirming-signals")
+    cdc = tri.get("confirming_distinct_claims", nconf)
+    if cdc < nconf:
+        reasons.append(f"echoed-claims({nconf}->{cdc})")
+    if tri.get("net_independent", 0) <= 0:
+        reasons.append("no-net-independent-convergence")
+    if distinct_predictions == 0:
+        reasons.append("no-falsifiable-prediction")
+    elif raw_predictions is not None and distinct_predictions is not None and raw_predictions > distinct_predictions:
+        reasons.append(f"echoed-predictions({raw_predictions}->{distinct_predictions})")
+    shape = "ALPHA" if not reasons else "RECON"
+    warning = "HIGH-STAKES EFFORT SHORTFALL" if (shape == "RECON" and stakes == "high") else ""
+    return {"label": shape, "alpha": shape == "ALPHA", "reasons": reasons, "warning": warning}
 
 
 def verify(rdir):
@@ -1114,19 +1196,30 @@ def digest(rdir):
     L.append(f"\n## findings (OBSERVED first)")
     for f in sorted(finds, key=lambda x: x["label"]):
         L.append(f"- ({f['label']}) {f['text']}  <-{f['artifact_id']}@{f.get('locator')}")
-    hyps = [r for r in rows if r.get("kind") == "hypothesis"]
-    if hyps:                                                  # Rank-7 alpha layer: thesis + weak-signal triangulation
-        L.append(f"\n## 알파 가설 + 삼각측량 ({len(hyps)})")
-        for h in hyps:
-            t = triangulate(rdir, h["hypothesis_id"])
-            L.append(f"- {h['thesis'][:90]}  [confirm {t['confirming']}(독립호스트 {t['independent_confirming_hosts']}, "
-                     f"modality {len(t['confirming_modalities'])}) / disconfirm {t['disconfirming']} / net {t['net_independent']}]")
     pr = [r for r in _read_jsonl(os.path.join(rdir, "predictions.jsonl")) if r.get("kind") == "prediction"]
+    hyps_latest = {}                                          # latest row per hid (stakes is mutable metadata; last wins)
+    for r in rows:
+        if r.get("kind") == "hypothesis":
+            hyps_latest[r["hypothesis_id"]] = r
+    if hyps_latest:                                           # Rank-7 alpha layer: thesis + weak-signal triangulation
+        L.append(f"\n## 알파 가설 + 삼각측량 ({len(hyps_latest)})")
+        for hid, h in hyps_latest.items():
+            t = triangulate(rdir, hid)
+            preds_h = [p for p in pr if p.get("hypothesis_id", "") == hid]   # per-thesis raw vs distinct predictions
+            lab = alpha_label(t, stakes=h.get("stakes", ""),
+                              distinct_predictions=_distinct_pred_count(preds_h), raw_predictions=len(preds_h))
+            stamp = (f"[!{lab['warning']}] " if lab["warning"] else "") + "[" + lab["label"] + \
+                    (": " + ", ".join(lab["reasons"]) if lab["reasons"] else "") + "]"
+            L.append(f"- {h['thesis'][:90]}  [confirm {t['confirming']} (distinct {t['confirming_distinct_claims']}, "
+                     f"독립호스트 {t['independent_confirming_hosts']}, modality {len(t['confirming_modalities'])}) "
+                     f"/ disconfirm {t['disconfirming']} / net {t['net_independent']}]  {stamp}")
     if pr:
         cal = calibration(rdir)
-        L.append(f"\n## 예측 ({len(pr)} 등록 / resolved {cal['n_resolved']} / premature {cal['n_premature']} / brier {cal['brier_all']})")
+        L.append(f"\n## 예측 ({len(pr)} 등록 · distinct {cal['n_distinct_predictions']} / resolved {cal['n_resolved']} "
+                 f"/ premature {cal['n_premature']} / brier {cal['brier_all']})")
         for p in pr:
-            L.append(f"- (conf {p.get('stated_confidence')}, by {p.get('resolve_by')}) {p.get('claim', '')[:100]}")
+            dupmark = f"  (dup of {p['near_duplicate_of']})" if p.get("near_duplicate_of") else ""
+            L.append(f"- (conf {p.get('stated_confidence')}, by {p.get('resolve_by')}) {p.get('claim', '')[:100]}{dupmark}")
     L.append(f"\n## 남은 frontier ({len(st['open'])})")
     for o in st["open"]:
         L.append(f"- [ ] {o}")
@@ -1177,6 +1270,7 @@ def main():
     pgr = sub.add_parser("grade"); pgr.add_argument("rdir"); pgr.add_argument("conclusion_id"); pgr.add_argument("standard_id"); pgr.add_argument("--as-of", default=None, dest="as_of")
     ph = sub.add_parser("hypothesis"); ph.add_argument("rdir"); ph.add_argument("thesis")   # Rank-7 alpha layer
     ph.add_argument("--signature", default=""); ph.add_argument("--decay", default="")
+    ph.add_argument("--stakes", default="", choices=["", "low", "med", "high"])
     pt = sub.add_parser("triangulate"); pt.add_argument("rdir"); pt.add_argument("hypothesis_id")
     a = ap.parse_args()
     if a.cmd == "open":
@@ -1219,7 +1313,7 @@ def main():
     elif a.cmd == "grade":
         print(json.dumps(grade_conclusion(rd, a.conclusion_id, a.standard_id, a.as_of), ensure_ascii=False))
     elif a.cmd == "hypothesis":
-        print(json.dumps(set_hypothesis(rd, a.thesis, a.signature, a.decay), ensure_ascii=False))
+        print(json.dumps(set_hypothesis(rd, a.thesis, a.signature, a.decay, a.stakes), ensure_ascii=False))
     elif a.cmd == "triangulate":
         print(json.dumps(triangulate(rd, a.hypothesis_id), ensure_ascii=False))
 
