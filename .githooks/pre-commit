@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# pre-commit hook: enforce skill staleness check when code files change.
+# Anthropic pattern: "90% of PRs include skill updates" — if you touch the code,
+# check if the skills are stale.
+#
+# Install: git config core.hooksPath .githooks
+# Or:      cp .githooks/pre-commit .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit
+
+set -e
+
+# Only check if Python source files are being committed
+CHANGED_PY=$(git diff --cached --name-only --diff-filter=ACM | grep '\.py$' || true)
+
+if [ -z "$CHANGED_PY" ]; then
+    exit 0
+fi
+
+# Check if any core code files changed (not just tests or scripts)
+CORE_CHANGED=$(echo "$CHANGED_PY" | grep -E '^(refledger|refrecord|refextract|refinsight|refocr|refsep)\.py$' || true)
+
+if [ -z "$CORE_CHANGED" ]; then
+    exit 0
+fi
+
+echo "[pre-commit] Core code changed: $CORE_CHANGED"
+echo "[pre-commit] Checking skill staleness..."
+
+# Run staleness check with 30-day TTL (warning only, don't block)
+if python check_skill_staleness.py --ttl 30 2>/dev/null; then
+    echo "[pre-commit] All skills fresh."
+else
+    echo ""
+    echo "╔══════════════════════════════════════════════════════════════╗"
+    echo "║  WARNING: Stale skill docs detected.                       ║"
+    echo "║  Core code changed but SKILL.md files may be outdated.     ║"
+    echo "║                                                            ║"
+    echo "║  Run: python check_skill_staleness.py --fix                ║"
+    echo "║  Or update last_verified in skills/*/SKILL.md manually.    ║"
+    echo "╚══════════════════════════════════════════════════════════════╝"
+    echo ""
+    # Warning only — don't block the commit. Change to 'exit 1' to enforce.
+fi
+
+exit 0

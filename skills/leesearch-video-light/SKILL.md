@@ -10,6 +10,7 @@ description: >-
 when_to_use: >-
   Caption-available YouTube trend reading / cheap video research where downloading and ASR are unnecessary.
   For no-caption / foreign / non-YouTube / deep digs, use leesearch-video-heavy instead.
+last_verified: 2026-06-09
 ---
 
 # leesearch-video-light (cheap, lawful, farm-verified)

@@ -12,6 +12,7 @@ when_to_use: >-
   Any research / investigation / trend-reading request where you want one reliable front-door that routes to
   the correct gathering skill and guarantees farm-verified, cited conclusions — especially when unsure which
   research skill fits.
+last_verified: 2026-06-09
 ---
 
 # leesearch — research front-door (router)
