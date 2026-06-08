@@ -66,6 +66,14 @@ Then seal the load-bearing PUBLIC bytes through the farm cite-or-fail gate (brow
   lead, not "ask the user"). Public-only = general + reproducible + ToS-clean. Login-edge is *access*, not alpha.
 - **Wall escalation** (web_quality label): `JS_WALL` → farm browser RENDER (login-free); `BOT_WALL` → stop / reroute
   (no bypass); `LOGIN_WALL` → excluded; `DOWNLOAD_ONLY` → download + local parse. Never silently retreat to 2차 text.
+- **EARN a 2nd modality (don't just stamp single-modality RECON and stop).** The modality class is by FILE TYPE: an
+  NTIS/DART/KIPRIS/나라장터 page fetched as html is `web`, NOT `structured` — so a run that *read* authority data
+  but only registered the page still triangulates as `modality 1` and is correctly stamped `RECON: single-modality`.
+  To make the authority leg COUNT (→ ALPHA): **EXTRACT the rows/fields and `ingest` them as `.json`/`.csv`**
+  (modality=structured), or save an official-doc screenshot/PDF (image/document). Measured: KR authority sources are
+  JS-walled and register as `web`, so a digest stamped `RECON: single-modality` usually means "go earn the structured
+  leg," not "this is hopeless." (The digest stays quiet — no EFFORT-SHORTFALL alarm — for single-modality alone; it
+  only blares when the shortfall is BEYOND modality, e.g. echoed claims/predictions or zero net convergence.)
 - **Convergence, not a single source.** Rank by how many INDEPENDENT public signal-types + modalities converge.
 - **cite-or-fail.** Only fetched bytes + verbatim quote. A clean public DISCONFIRM (a dream leg killed) is a SUCCESS.
 - **Two-brain.** Code = nouns + counts (triangulate). "Is this alpha / why hidden / when does it decay / where to

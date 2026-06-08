@@ -925,7 +925,15 @@ def alpha_label(tri, stakes="", distinct_predictions=None, raw_predictions=None)
     elif raw_predictions is not None and distinct_predictions is not None and raw_predictions > distinct_predictions:
         reasons.append(f"echoed-predictions({raw_predictions}->{distinct_predictions})")
     shape = "ALPHA" if not reasons else "RECON"
-    warning = "HIGH-STAKES EFFORT SHORTFALL" if (shape == "RECON" and stakes == "high") else ""
+    # The RECON *label* is always honest (any missed criterion). The LOUD high-stakes warning is reserved for an
+    # EGREGIOUS shortfall — a quality/convergence miss BEYOND the often-unavoidable single-modality. KR authority
+    # sources (NTIS/DART/KIPRIS) are JS-walled and register as 'web', so single-modality ALONE is frequently a
+    # capture artifact, not laziness (see the SKILL note: earn a structured modality by registering extracted rows
+    # as json/csv). Gating the warning on host-COUNT instead would REOPEN the original failure (hidden-gem-natl had
+    # 4 news hosts + 1 modality), so we key on reason QUALITY, not host volume. Measured live (n=2): single-modality
+    # fires near-universally on KR runs, so an unconditional warning would cry wolf.
+    egregious = bool(set(reasons) - {"single-modality"})
+    warning = "HIGH-STAKES EFFORT SHORTFALL" if (shape == "RECON" and stakes == "high" and egregious) else ""
     return {"label": shape, "alpha": shape == "ALPHA", "reasons": reasons, "warning": warning}
 
 

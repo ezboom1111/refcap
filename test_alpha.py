@@ -142,11 +142,21 @@ class AlphaDedupeAndStakes(unittest.TestCase):
         with self.assertRaises(ValueError):
             R.set_hypothesis(self.r, "thesis bad", stakes="huge")
 
-    def test_alpha_label_recon_on_single_modality_high_stakes(self):
-        tri = {"confirming": 3, "confirming_modalities": ["web"], "confirming_distinct_claims": 3, "net_independent": 2}
+    def test_alpha_label_single_modality_alone_is_mild_recon(self):
+        # RECALIBRATED (live n=2: single-modality fires near-universally on KR runs since authority sources are
+        # JS-walled -> 'web'). single-modality ALONE = honest RECON label, but NOT a loud cry-wolf warning.
+        tri = {"confirming": 5, "confirming_modalities": ["web"], "confirming_distinct_claims": 5, "net_independent": 4}
         lab = R.alpha_label(tri, stakes="high")
         self.assertFalse(lab["alpha"]); self.assertEqual(lab["label"], "RECON")
-        self.assertIn("single-modality", lab["reasons"])
+        self.assertEqual(lab["reasons"], ["single-modality"])
+        self.assertEqual(lab["warning"], "")                                 # no alarm on the common single-modality case
+
+    def test_alpha_label_loud_when_shortfall_beyond_single_modality(self):
+        # the REAL hidden-gem-natl shape: single-modality AND echoed predictions -> egregious -> LOUD (still caught).
+        tri = {"confirming": 5, "confirming_modalities": ["web"], "confirming_distinct_claims": 5, "net_independent": 4}
+        lab = R.alpha_label(tri, stakes="high", distinct_predictions=2, raw_predictions=3)
+        self.assertEqual(lab["label"], "RECON")
+        self.assertTrue(any("echoed-predictions" in r for r in lab["reasons"]))
         self.assertEqual(lab["warning"], "HIGH-STAKES EFFORT SHORTFALL")
 
     def test_alpha_label_alpha_on_multimodal_converging(self):
