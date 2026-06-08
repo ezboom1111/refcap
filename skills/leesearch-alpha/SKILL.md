@@ -63,6 +63,7 @@ when_to_use: >-
 | `echoed-claims` | 복붙 에코를 독립 호스트/다른 모달리티의 증거로 교체·통합 |
 | `echoed-predictions` | 중복 예측 제거 — 서로 다른 falsifiable 예측만 |
 | `no-net-independent-convergence` | 독립 호스트 확증 추가, 또는 반증이 우세하면 가설 약화/폐기 |
+| `thin-independence(<3)` | 독립 호스트(eTLD+1)를 ≥3개로 확보. **주체 자신의 페이지·보도자료는 독립 코로보 아님** — 2-host(특히 1개가 주체)는 "확립"이 아니라 후보 |
 | `no-falsifiable-prediction` | `resolve_by` 있는 `predict` 1개+ 등록 |
 | `no-confirming-signals` | findings를 `--hypothesis`로 연결했는지 확인(현재 0건) |
 
@@ -94,6 +95,7 @@ Then seal the load-bearing PUBLIC bytes through the farm cite-or-fail gate (brow
 - **LOGIN/MEMBER EXCLUDED.** 별점 사이트 · 회원 카페 · 로그인 detail = out of scope (not a lead). Public-only =
   general + reproducible + ToS-clean. Login-edge is *access*, not alpha.
 - **Surprise + survive-refutation, not just convergence.** N개가 수렴해도 *뻔하면* 알파 아님. 독립 적대 패스를 통과해야 alpha.
+- **독립성 ≥3, self 제외.** 2-host 수렴(특히 1개가 *주체 자신*의 페이지/보도자료)은 ALPHA 아님 — 깔끔해 보이는 "글로벌 1위·>90% 점유" 류 단일출처 주장이 정확히 여기서 걸린다(측정됨). 코드는 호스트만 세니, "그중 하나가 주체 자신인가"는 네가 판단.
 - **Wall escalation** (web_quality label): `JS_WALL` → farm browser RENDER (login-free); `BOT_WALL` → stop / reroute
   (no bypass); `LOGIN_WALL` → excluded; `DOWNLOAD_ONLY` → download + local parse. Never silently retreat to 2차 text.
 - **EARN a 2nd modality** (don't stamp single-modality RECON and stop). Modality class is by FILE TYPE: an authority

@@ -917,8 +917,11 @@ def triangulate(rdir, hypothesis_id):
 # The alpha CONCEPT's default definition — domain/site/platform-NEUTRAL (names nothing perishable), and OVERRIDABLE
 # by the agent/skill per `criteria` (like grade_conclusion's declared knobs). It is the definition of "alpha", not a
 # hidden methodology baked immovably in the spine: pass criteria={...} to change the bar; the spine just REPORTS.
-_ALPHA_CRITERIA = {"min_modalities": 2, "require_net_positive": True,
+_ALPHA_CRITERIA = {"min_modalities": 2, "min_independent_hosts": 3, "require_net_positive": True,
                    "require_distinct_predict": True, "no_echoed_claims": True}
+# min_independent_hosts: ALPHA needs corroboration breadth, not just 2 sources (measured: a 2-host pick — one being
+# the subject's own page — passed [ALPHA] and the agent over-claimed "established finding"; judges flagged it).
+# The CODE counts distinct hosts; "is one of them the subject itself?" is the agent's call (two-brain).
 
 
 def alpha_label(tri, stakes="", distinct_predictions=None, raw_predictions=None, criteria=None):
@@ -939,6 +942,8 @@ def alpha_label(tri, stakes="", distinct_predictions=None, raw_predictions=None,
         reasons.append(f"echoed-claims({nconf}->{cdc})")
     if c["require_net_positive"] and tri.get("net_independent", 0) <= 0:
         reasons.append("no-net-independent-convergence")
+    if nconf and tri.get("independent_confirming_hosts", 0) < c["min_independent_hosts"]:
+        reasons.append(f"thin-independence({tri.get('independent_confirming_hosts', 0)}<{c['min_independent_hosts']})")
     if c["require_distinct_predict"] and distinct_predictions == 0:
         reasons.append("no-falsifiable-prediction")
     elif c["require_distinct_predict"] and raw_predictions is not None and distinct_predictions is not None and raw_predictions > distinct_predictions:

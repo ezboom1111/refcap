@@ -145,7 +145,7 @@ class AlphaDedupeAndStakes(unittest.TestCase):
     def test_alpha_label_single_modality_alone_is_mild_recon(self):
         # RECALIBRATED (live n=2: single-modality fires near-universally on KR runs since authority sources are
         # JS-walled -> 'web'). single-modality ALONE = honest RECON label, but NOT a loud cry-wolf warning.
-        tri = {"confirming": 5, "confirming_modalities": ["web"], "confirming_distinct_claims": 5, "net_independent": 4}
+        tri = {"confirming": 5, "confirming_modalities": ["web"], "confirming_distinct_claims": 5, "net_independent": 4, "independent_confirming_hosts": 5}
         lab = R.alpha_label(tri, stakes="high")
         self.assertFalse(lab["alpha"]); self.assertEqual(lab["label"], "RECON")
         self.assertEqual(lab["reasons"], ["single-modality"])
@@ -153,7 +153,7 @@ class AlphaDedupeAndStakes(unittest.TestCase):
 
     def test_alpha_label_loud_when_shortfall_beyond_single_modality(self):
         # the REAL hidden-gem-natl shape: single-modality AND echoed predictions -> egregious -> LOUD (still caught).
-        tri = {"confirming": 5, "confirming_modalities": ["web"], "confirming_distinct_claims": 5, "net_independent": 4}
+        tri = {"confirming": 5, "confirming_modalities": ["web"], "confirming_distinct_claims": 5, "net_independent": 4, "independent_confirming_hosts": 5}
         lab = R.alpha_label(tri, stakes="high", distinct_predictions=2, raw_predictions=3)
         self.assertEqual(lab["label"], "RECON")
         self.assertTrue(any("echoed-predictions" in r for r in lab["reasons"]))
@@ -161,13 +161,13 @@ class AlphaDedupeAndStakes(unittest.TestCase):
 
     def test_alpha_label_alpha_on_multimodal_converging(self):
         tri = {"confirming": 3, "confirming_modalities": ["web", "structured"],
-               "confirming_distinct_claims": 3, "net_independent": 2}
+               "confirming_distinct_claims": 3, "net_independent": 2, "independent_confirming_hosts": 3}
         lab = R.alpha_label(tri, stakes="high", distinct_predictions=1)
         self.assertTrue(lab["alpha"]); self.assertEqual(lab["label"], "ALPHA"); self.assertEqual(lab["reasons"], [])
 
     def test_alpha_label_flags_echoed_and_missing_prediction(self):
         tri = {"confirming": 5, "confirming_modalities": ["web", "structured"],
-               "confirming_distinct_claims": 3, "net_independent": 2}
+               "confirming_distinct_claims": 3, "net_independent": 2, "independent_confirming_hosts": 5}
         lab = R.alpha_label(tri, stakes="low", distinct_predictions=0)
         self.assertFalse(lab["alpha"])
         self.assertTrue(any("echoed-claims" in r for r in lab["reasons"]))
@@ -182,7 +182,7 @@ class AlphaDedupeAndStakes(unittest.TestCase):
 
     def test_alpha_label_flags_echoed_predictions(self):                     # reviewer MEDIUM-2
         tri = {"confirming": 3, "confirming_modalities": ["web", "structured"],
-               "confirming_distinct_claims": 3, "net_independent": 2}
+               "confirming_distinct_claims": 3, "net_independent": 2, "independent_confirming_hosts": 3}
         lab = R.alpha_label(tri, distinct_predictions=2, raw_predictions=3)  # 3 registered, only 2 distinct
         self.assertFalse(lab["alpha"])
         self.assertTrue(any("echoed-predictions(3->2)" in r for r in lab["reasons"]))
@@ -210,11 +210,30 @@ class AlphaDedupeAndStakes(unittest.TestCase):
         self.assertIn("RECON", txt)                                          # the mislabel-as-alpha is now structurally visible
 
     def test_alpha_criteria_is_agent_overridable_not_code_fixed(self):       # (3): no immovable methodology in the spine
-        tri = {"confirming": 3, "confirming_modalities": ["web"], "confirming_distinct_claims": 3, "net_independent": 2}
+        tri = {"confirming": 3, "confirming_modalities": ["web"], "confirming_distinct_claims": 3, "net_independent": 2, "independent_confirming_hosts": 3}
         # default: single modality -> RECON
         self.assertEqual(R.alpha_label(tri, distinct_predictions=1)["label"], "RECON")
         # agent overrides the bar (e.g. a domain where one modality is acceptable) -> ALPHA, no spine edit needed
         self.assertEqual(R.alpha_label(tri, distinct_predictions=1, criteria={"min_modalities": 1})["label"], "ALPHA")
+
+    def test_alpha_label_flags_thin_independence(self):                      # the Nikkiso-class gap C measured
+        # multi-modal + net>0 + distinct + a prediction, BUT only 2 independent hosts -> NOT alpha (thin corroboration)
+        tri = {"confirming": 8, "confirming_modalities": ["web", "structured"], "confirming_distinct_claims": 8,
+               "net_independent": 2, "independent_confirming_hosts": 2}
+        lab = R.alpha_label(tri, stakes="high", distinct_predictions=1)
+        self.assertEqual(lab["label"], "RECON")                              # was [ALPHA] before the host floor
+        self.assertTrue(any("thin-independence(2<3)" in r for r in lab["reasons"]))
+        self.assertEqual(lab["warning"], "HIGH-STAKES EFFORT SHORTFALL")     # thin-independence is egregious (beyond modality)
+
+    def test_alpha_label_alpha_when_hosts_meet_floor(self):
+        tri = {"confirming": 8, "confirming_modalities": ["web", "structured"], "confirming_distinct_claims": 8,
+               "net_independent": 3, "independent_confirming_hosts": 3}
+        self.assertEqual(R.alpha_label(tri, distinct_predictions=1)["label"], "ALPHA")   # 3 independent hosts clears it
+
+    def test_alpha_label_host_floor_is_overridable(self):                    # domain that accepts 2 hosts -> agent declares
+        tri = {"confirming": 8, "confirming_modalities": ["web", "structured"], "confirming_distinct_claims": 8,
+               "net_independent": 2, "independent_confirming_hosts": 2}
+        self.assertEqual(R.alpha_label(tri, distinct_predictions=1, criteria={"min_independent_hosts": 2})["label"], "ALPHA")
 
     def test_host_collapse_is_not_region_skewed(self):                       # de-bias _MULTI_SUFFIX (LatAm/SEA/etc.)
         self.assertEqual(R._host("https://shop.example.com.mx"), "example.com.mx")   # not "com.mx"
