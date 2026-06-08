@@ -525,15 +525,26 @@ def measure_capture_error(rdir, artifact_id, hyp_span, truth_span):
     return row
 
 
-_MULTI_SUFFIX = {"co.kr", "or.kr", "ne.kr", "go.kr", "re.kr", "pe.kr", "ac.kr",   # ac.kr = ALL KR universities (critical:
-                 "co.uk", "org.uk", "ac.uk", "co.jp", "ne.jp", "or.jp", "go.jp", "ac.jp",  # else snu.ac.kr/kaist.ac.kr -> "ac.kr")
-                 "com.au", "com.cn", "com.br", "co.in", "co.nz"}
+# Curated common-traffic multi-label suffixes ACROSS REGIONS (not one country). A snapshot + NOT exhaustive: the
+# canonical source is the Public Suffix List (bundle it if exhaustive correctness is needed). Kept small (small-TCB)
+# but de-skewed so non-Anglo/EA orgs (a.com.mx, b.com.sg) don't FALSELY collapse to the bare suffix and read as the
+# "same org" (which would under-count independent hosts / mis-fire fake-corroboration). This is a STRUCTURAL DNS
+# primitive (low-churn), NOT the traffic-driven SOURCE SELECTION (that is live-discovered in the skill, never frozen).
+_MULTI_SUFFIX = {
+    "co.kr", "or.kr", "ne.kr", "go.kr", "re.kr", "pe.kr", "ac.kr",                     # KR (ac.kr: snu.ac.kr != ac.kr)
+    "co.uk", "org.uk", "ac.uk", "gov.uk", "co.jp", "ne.jp", "or.jp", "go.jp", "ac.jp",  # UK / JP
+    "com.au", "net.au", "org.au", "gov.au", "edu.au", "co.nz", "com.cn", "co.in",      # AU / NZ / CN / IN
+    "com.br", "com.mx", "com.ar", "com.co",                                            # LatAm
+    "com.sg", "com.hk", "com.tw", "com.my", "co.id", "co.th", "com.ph", "com.vn",      # SE / E Asia
+    "co.za", "com.tr", "co.il", "com.ua", "com.sa",                                    # Africa / MENA / EE
+}
 
 
 def _host(url):
     """Registrable domain (eTLD+1), www-stripped, with a small frozen multi-label-suffix table so a subdomain
-    (news.naver.com) reduces to its org (naver.com) and a same-org 'corroboration' is caught. NOT a full Public
-    Suffix List (not stdlib); covers the suffixes that matter for KR/EN research (subdomain fake-independence)."""
+    (news.bbc.co.uk reduces to bbc.co.uk, not co.uk) collapses to its org and a same-org 'corroboration' is caught.
+    NOT a full Public Suffix List (not stdlib); covers common multi-label ccTLDs across regions (see _MULTI_SUFFIX),
+    not one country (subdomain fake-independence)."""
     h = (urllib.parse.urlparse(str(url)).hostname or "").lower()
     if h.startswith("www."):
         h = h[4:]
@@ -903,35 +914,43 @@ def triangulate(rdir, hypothesis_id):
                          "host": _host_of(f), "modality": _mod_of(f)} for f in sig]}
 
 
-def alpha_label(tri, stakes="", distinct_predictions=None, raw_predictions=None):
-    """ADVISORY mechanical label: is a thesis at ALPHA grade, or only RECON? Derives PURELY from the alpha layer's
-    OWN definition (independent convergence across DISTINCT host AND modality, no echoed claims, a falsifiable
-    prediction registered) + the agent-declared `stakes`. Code REPORTS the shape + a label; the agent still judges.
-    `stakes` only sets how LOUD a shortfall is flagged (high-stakes recon = a warning; low-stakes recon = just named).
-    distinct_predictions / raw_predictions (optional) = the DISTINCT vs total predictions tied to this thesis (raw >
-    distinct => echoed re-submits). This is the structural fix for the hidden-gem-natl mislabel: a 1-modality
+# The alpha CONCEPT's default definition — domain/site/platform-NEUTRAL (names nothing perishable), and OVERRIDABLE
+# by the agent/skill per `criteria` (like grade_conclusion's declared knobs). It is the definition of "alpha", not a
+# hidden methodology baked immovably in the spine: pass criteria={...} to change the bar; the spine just REPORTS.
+_ALPHA_CRITERIA = {"min_modalities": 2, "require_net_positive": True,
+                   "require_distinct_predict": True, "no_echoed_claims": True}
+
+
+def alpha_label(tri, stakes="", distinct_predictions=None, raw_predictions=None, criteria=None):
+    """ADVISORY mechanical label: is a thesis at ALPHA grade, or only RECON? Derives from an alpha definition
+    (independent convergence across DISTINCT host AND modality, no echoed claims, a falsifiable prediction) that is
+    AGENT-OVERRIDABLE via `criteria` (default `_ALPHA_CRITERIA`; no immovable methodology in the spine) + the
+    agent-declared `stakes`. Code REPORTS the shape + a label; the agent still judges. `stakes` only sets how LOUD a
+    shortfall is flagged. distinct_predictions / raw_predictions (optional) = DISTINCT vs total predictions tied to
+    this thesis (raw > distinct => echoed re-submits). Structural fix for the hidden-gem-natl mislabel: a 1-modality
     single-burst run gets stamped RECON, so a low-effort recon can no longer masquerade as alpha in the digest."""
+    c = {**_ALPHA_CRITERIA, **(criteria or {})}
     reasons = []
     nconf = tri.get("confirming", 0)
-    if len(tri.get("confirming_modalities", [])) < 2:
+    if len(tri.get("confirming_modalities", [])) < c["min_modalities"]:
         reasons.append("single-modality" if nconf else "no-confirming-signals")
     cdc = tri.get("confirming_distinct_claims", nconf)
-    if cdc < nconf:
+    if c["no_echoed_claims"] and cdc < nconf:
         reasons.append(f"echoed-claims({nconf}->{cdc})")
-    if tri.get("net_independent", 0) <= 0:
+    if c["require_net_positive"] and tri.get("net_independent", 0) <= 0:
         reasons.append("no-net-independent-convergence")
-    if distinct_predictions == 0:
+    if c["require_distinct_predict"] and distinct_predictions == 0:
         reasons.append("no-falsifiable-prediction")
-    elif raw_predictions is not None and distinct_predictions is not None and raw_predictions > distinct_predictions:
+    elif c["require_distinct_predict"] and raw_predictions is not None and distinct_predictions is not None and raw_predictions > distinct_predictions:
         reasons.append(f"echoed-predictions({raw_predictions}->{distinct_predictions})")
     shape = "ALPHA" if not reasons else "RECON"
     # The RECON *label* is always honest (any missed criterion). The LOUD high-stakes warning is reserved for an
-    # EGREGIOUS shortfall — a quality/convergence miss BEYOND the often-unavoidable single-modality. KR authority
-    # sources (NTIS/DART/KIPRIS) are JS-walled and register as 'web', so single-modality ALONE is frequently a
-    # capture artifact, not laziness (see the SKILL note: earn a structured modality by registering extracted rows
-    # as json/csv). Gating the warning on host-COUNT instead would REOPEN the original failure (hidden-gem-natl had
-    # 4 news hosts + 1 modality), so we key on reason QUALITY, not host volume. Measured live (n=2): single-modality
-    # fires near-universally on KR runs, so an unconditional warning would cry wolf.
+    # EGREGIOUS shortfall — a quality/convergence miss BEYOND the often-unavoidable single-modality: when an
+    # authority source is fetched as a page (its structured data not extracted) it registers as 'web', so
+    # single-modality ALONE is frequently a capture artifact, not laziness (the agent's SKILL prescribes the remedy,
+    # the spine doesn't). Gating the warning on host-COUNT instead would REOPEN the original failure (which had 4
+    # same-type hosts + 1 modality), so we key on reason QUALITY, not host volume. Measured live: single-modality
+    # fires near-universally when sources are JS-walled, so an unconditional warning would cry wolf.
     egregious = bool(set(reasons) - {"single-modality"})
     warning = "HIGH-STAKES EFFORT SHORTFALL" if (shape == "RECON" and stakes == "high" and egregious) else ""
     return {"label": shape, "alpha": shape == "ALPHA", "reasons": reasons, "warning": warning}
@@ -1147,8 +1166,8 @@ def ingest(rdir, target, note=""):
             ql = json_quality(body, http_status=status)
         else:
             # t == 'html', but detect_type is depth-0 (ext/scheme) and misses structured endpoints on
-            # non-'api.' hosts (openapi.naver.com, dapi.kakao.com, registry.npmjs.org, .../api/v2/... with
-            # no ext). MECHANICAL sniff (not a content classifier): if the fetched body parses as JSON,
+            # non-'api.' hosts (e.g. openapi.<host>, registry.npmjs.org, .../api/v2/... with no ext, any region).
+            # MECHANICAL sniff (not a content classifier): if the fetched body parses as JSON,
             # label it via json_quality so API_ERROR/MALFORMED/EMPTY/rate-limit detection runs instead of
             # the HTML-tuned web_quality (which false-EMPTYs a valid array and false-OKs a >1500-char error).
             try:

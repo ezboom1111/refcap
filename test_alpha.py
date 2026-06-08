@@ -209,6 +209,19 @@ class AlphaDedupeAndStakes(unittest.TestCase):
         txt = open(R.digest(self.r), encoding="utf-8").read()
         self.assertIn("RECON", txt)                                          # the mislabel-as-alpha is now structurally visible
 
+    def test_alpha_criteria_is_agent_overridable_not_code_fixed(self):       # (3): no immovable methodology in the spine
+        tri = {"confirming": 3, "confirming_modalities": ["web"], "confirming_distinct_claims": 3, "net_independent": 2}
+        # default: single modality -> RECON
+        self.assertEqual(R.alpha_label(tri, distinct_predictions=1)["label"], "RECON")
+        # agent overrides the bar (e.g. a domain where one modality is acceptable) -> ALPHA, no spine edit needed
+        self.assertEqual(R.alpha_label(tri, distinct_predictions=1, criteria={"min_modalities": 1})["label"], "ALPHA")
+
+    def test_host_collapse_is_not_region_skewed(self):                       # de-bias _MULTI_SUFFIX (LatAm/SEA/etc.)
+        self.assertEqual(R._host("https://shop.example.com.mx"), "example.com.mx")   # not "com.mx"
+        self.assertEqual(R._host("https://a.example.com.sg"), "example.com.sg")
+        self.assertEqual(R._host("https://b.example.co.za"), "example.co.za")
+        self.assertEqual(R._host("https://news.naver.com/x"), "naver.com")           # 2-label still correct
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
