@@ -3,11 +3,11 @@ name: leesearch
 description: >-
   Lee's unified research front-door (이지범's personal research router). Invoke this FIRST whenever the user
   asks to research / investigate / 조사 / 트렌드 분석 anything and wants traceable, farm-verifiable conclusions.
-  It does NOT gather by itself — it CLASSIFIES the task and dispatches to the right executor skill
-  (leesearch-video-light, leesearch-video-heavy, or the farm lenses market-scan / product-planning /
-  deep-browser-research), then makes the load-bearing claims tamper-evident through the browser-agent-mcp-farm
-  cite-or-fail gate. Use this as the single deterministic entry point so research is never left to ad-hoc
-  skill-picking. Say "leesearch <goal>" to force it.
+  It is the dispatcher. For ordinary research it classifies the task and dispatches each source to the right
+  executor skill (leesearch-video-light, leesearch-video-heavy, or the farm lenses market-scan /
+  product-planning / deep-browser-research). For hidden-alpha research it switches to alpha-fusion mode:
+  multiple source legs, multiple data shapes, one executor per source, and a cite-or-fail gate on the
+  load-bearing claims. Say "leesearch <goal>" to force it.
 when_to_use: >-
   Any research / investigation / trend-reading request where you want one reliable front-door that routes to
   the correct gathering skill and guarantees farm-verified, cited conclusions — especially when unsure which
@@ -20,7 +20,9 @@ when_to_use: >-
 > and `~/.codex/skills/leesearch/` for Claude Code and Codex respectively.
 
 You (the host agent) are the dispatcher. This skill is the **decision tree**; the leaves do the gathering.
-Pick exactly ONE executor per source, run it, then seal the load-bearing claims through the farm gate.
+For ordinary research, pick exactly ONE executor per source, run it, then seal the load-bearing claims through
+the farm gate. For hidden-alpha research, do **not** collapse the whole task to one leaf: run **Alpha Fusion
+Mode** below. The invariant is one executor **per source**, not one executor for the whole investigation.
 
 ## Routing decision tree
 1. **Target is a video / short-form clip?**
@@ -34,9 +36,34 @@ Pick exactly ONE executor per source, run it, then seal the load-bearing claims 
 4. **Generic web page / PDF / dashboard / long article (not video, not market/product)?** → **`deep-browser-research`**.
 5. **Just need a tamper-evident bundle of pages you already know?** → drive **`browser-agent-mcp-farm`** directly.
 6. **Want the NON-OBVIOUS / hidden / mispriced / underrated answer — not the obvious brand answer?** (숨은 꿀 /
-   저평가 / 남들 모르는 / 선제적 알파) → **`leesearch-alpha`** (thesis-driven, PUBLIC-only weak-signal triangulation +
-   a falsifiable prediction, refined across passes; login EXCLUDED). Use when the answer is an INFERENCE from many
-   scattered public clues, not a lookup.
+   저평가 / 남들 모르는 / 선제적 알파) → **Alpha Fusion Mode** below (NOT just `leesearch-alpha` alone). The thesis
+   loop lives in `leesearch-alpha`; the source fan-out lives HERE. Do not collapse alpha to a single leaf.
+
+## Alpha Fusion Mode (hidden / underrated / mispriced requests)
+`leesearch-alpha` owns the thesis loop (hypothesis → findings → triangulate → predict → digest).
+This router owns the **source fan-out**: which data shapes to open, which executor handles each source.
+Run BOTH together. Do not stamp ALPHA from a single-leaf web-only investigation.
+
+1. **Declare the consensus baseline** (합의 앵커). Write the obvious/brand answer first; alpha = delta from that.
+2. **Open a source matrix.** For each data shape, ACTIVELY SEARCH for sources before deciding relevance:
+   - **unstructured** (required): news, community posts, long articles, reviews.
+   - **semi-structured** (required for med/high): PDF, tables, dashboards, screenshots, transcripts.
+   - **structured** (required for med/high): API/CSV/JSON/extracted rows from official databases, filings, patents.
+   - **video/audio** (default: search, then decide): Do a YouTube/platform search for the topic FIRST. If relevant
+     videos exist (they almost always do), capture at least one via `farm_evidence_run` + `farm_sample_frames`. Only
+     mark "not material" AFTER searching and finding nothing relevant — "I didn't look" is not "not material."
+   - **OCR** (when documents are image-based): scanned PDFs, infographics, screenshots with text.
+3. **Dispatch one executor per source** (invariant: one executor per source, not one per investigation):
+   - YouTube with captions → `leesearch-video-light`
+   - YouTube without captions / non-YouTube / ASR needed → `leesearch-video-heavy`
+   - Market numbers → `market-scan`; user pain → `product-planning`; long web/PDF → `deep-browser-research`
+   - Known pages → `browser-agent-mcp-farm` directly.
+4. **Per-shape minimums by stakes** (evidence budget lives in `leesearch-alpha`; reference it, don't duplicate here).
+   The alpha skill defines candidate counts (low 12-20, med 30-50, high 50-100) and shape requirements.
+   Key rule: each required shape must have ≥3 items — one-item shapes are checkbox compliance, not real diversity.
+5. **Stop gates.** Do not stamp ALPHA unless: 3+ independent eTLD+1 hosts, 1+ disconfirming/refutation pass,
+   1+ falsifiable `predict(resolve_by)`, cite-or-fail on load-bearing claims, and ALL required shapes present.
+   Missing shape → `RECON(<missing-shape>)` with the specific next pass to run.
 
 ## 소스/플랫폼 선택 (트래픽·점유율 기반 · 라이브 · 자가갱신 — 고정 목록 금지)
 **영원한 플랫폼은 없다.** 스킬에 "틱톡/X/IG/유튜브…" 고정 리스트를 박으면 *그 순간 늙는다* — 새 서비스가 떠도 구시대를 뒤진다. 그래서 이 스킬은 **목록(DATA)을 담지 않고 찾는 법(METHOD)만** 담는다:

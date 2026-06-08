@@ -38,16 +38,68 @@ when_to_use: >-
    ("hidden powerhouse = {public signal A + B + C converge non-obviously}"). Any domain. **Declare `--stakes` up
    front — it gates EFFORT, not modality**: a `high` thesis the digest later finds at RECON shape gets a loud
    EFFORT-SHORTFALL warning.
-2. **Gather WEAK public signals** by signal-TYPE (see taxonomy), each `record_finding(hypothesis_id, polarity=
-   confirms|disconfirms|neutral)` with a verbatim quote (cite-or-fail). Individually unconvincing is fine.
-3. **`triangulate(hypothesis_id)`** — REPORTS independent convergence (distinct host AND modality among confirming
+2. **Plan the shape matrix BEFORE collecting.** Check your stakes level (Evidence budget below). List which data
+   shapes are required and identify at least one concrete source per shape:
+   - unstructured: which news/community/review sites to search?
+   - semi-structured: which PDF reports, tables, dashboards, or transcripts to capture?
+   - structured: which API/DB/filing system to extract from? (DART, patent DB, Google Trends, etc.)
+   - video/audio (med/high): what YouTube/platform search query to run?
+   **Write the plan as a `frontier_open` note before gathering.** Do not start collecting until you have a source
+   for each required shape — "web search only, fix later" is how you get stuck in RECON loops.
+3. **Collect across ALL planned shapes** — interleave, don't serialize. Each `record_finding(hypothesis_id,
+   polarity=confirms|disconfirms|neutral)` with a verbatim quote (cite-or-fail). Individually unconvincing is fine.
+   **The shape comes from the artifact, not the source**: a gov page fetched as HTML = unstructured; the same page's
+   table extracted to `.csv` = structured. Earn the shape by producing the artifact.
+4. **`triangulate(hypothesis_id)`** — REPORTS independent convergence (distinct host AND modality among confirming
    signals, netted against disconfirming) + `confirming_distinct_claims` (string-near-identical echoes collapsed).
    YOU judge if it's decisive AND **surprising**; code sets no threshold.
-4. **Register a FALSIFIABLE `predict(hypothesis_id, ..., resolve_by)`** — the preemptive bet. Don't double-submit:
+5. **Register a FALSIFIABLE `predict(hypothesis_id, ..., resolve_by)`** — the preemptive bet. Don't double-submit:
    a same-deadline near-IDENTICAL re-`predict` is auto-flagged `near_duplicate_of` and dropped from the `distinct`
    count (a re-forecast with a *different* `resolve_by` is genuine, not a dup).
-5. **Refine / iterate** — open leads + missing legs via `frontier_open(hypothesis_id)`; next pass adds more PUBLIC
+6. **Refine / iterate** — open leads + missing legs via `frontier_open(hypothesis_id)`; next pass adds more PUBLIC
    fragments → re-`triangulate` → convergence GROWS or a leg gets cleanly DISCONFIRMED. Keep digging.
+
+## Evidence budget and data-shape floor
+Alpha is not a web-only lookup. It is a cross-shape assembly of public evidence. These are minimum effort gates by
+`--stakes`; if the public corpus is genuinely smaller, write that as a RECON limitation with evidence of the search.
+
+| stakes | candidate items | required shapes | per-shape minimum |
+|---|---:|---|---:|
+| `low` | 12-20 | 2+ shapes | 3 items each |
+| `med` | 30-50 | unstructured + semi-structured + structured | 5 items each |
+| `high` | 50-100 | unstructured + semi-structured + structured + video/audio (see below) | 5 items each |
+
+### Data shapes defined (by artifact type, not source prestige)
+- **unstructured**: HTML page, news article, blog post, forum thread, community review. An official gov page fetched
+  as HTML is still unstructured until you extract rows/fields.
+- **semi-structured**: PDF report, HTML table with extracted rows, dashboard screenshot with labeled values, video
+  transcript/captions (.vtt/.srt), captured page with structured lists.
+- **structured**: `.json`/`.csv` extracted from API, database query result, DART/EDGAR filing fields, patent metadata,
+  Google Trends export, financial metrics from a data provider. Numbers quoted in a news article do NOT count as
+  structured — the article is unstructured; extract the numbers into a structured artifact to count.
+- **video/audio**: YouTube video captured via `farm_evidence_run` + `farm_sample_frames`, podcast episode, webinar
+  recording, ASR transcript from `leesearch-video-heavy`. Capturing a YouTube page URL counts ONLY if you actually
+  read the captured text/captions/frames — a bare URL capture with no content extraction is not video evidence.
+
+### Video/audio/OCR decision protocol (not optional-by-default)
+For `med` and `high` stakes:
+1. **Search first, decide after.** Do a YouTube/platform search for the topic. Most topics have relevant video.
+2. **If relevant videos exist** (and they almost always do): capture at least one via `farm_evidence_run(url)` →
+   `farm_sample_frames(url, seconds=[...])` → read the captured text + frame screenshots → `record_finding` with
+   verbatim quotes from the video page or transcript.
+3. **If no relevant videos exist after searching**: record "video: searched [query], no material results" in the
+   ledger. This is legitimate — "searched and found nothing" ≠ "didn't search."
+4. **OCR**: required when load-bearing evidence is in scanned documents, infographics, or screenshot-only sources.
+   Use `farm_evidence_run` to capture, then read the extracted text. Not required when all text sources are
+   machine-readable.
+
+### Minimum quality gates
+- 3+ independent eTLD+1 hosts, excluding the subject's own page/press release.
+- 1+ disconfirming or adversarial-refutation pass recorded before finalizing.
+- 1+ falsifiable `predict(..., resolve_by)` attached to the thesis.
+- cite-or-fail passes for the load-bearing claims; gate=OK proves quote presence, not truth.
+- ALL required data shapes present with per-shape minimums met.
+- Any missing shape → `RECON(<missing-shape>)`, not ALPHA.
 
 ## 패스 종료 프로토콜 (digest 후 — RECON으로 *조용히* 끝내지 마라)
 `digest`의 스탬프를 읽고:
@@ -60,6 +112,9 @@ when_to_use: >-
 | RECON 이유 | 처방 (한 패스 더) |
 |---|---|
 | `single-modality` | 다른 모달리티 클래스 1개+ 확보: 추출 데이터를 `.json/.csv`(structured), 문서를 `.pdf`, 전사를 `.vtt`로 `ingest`. 같은 web 페이지만 더 모으면 안 늘어남 |
+| `missing-structured` | 관청/공시/API에서 수치를 `.json`/`.csv`로 추출. 뉴스 기사 속 숫자 인용 ≠ structured — 원본 DB/API 접근 |
+| `missing-semi-structured` | PDF 보고서 캡처, HTML 테이블 추출, 영상 자막 `.vtt` 획득, 대시보드 스크린샷+값 추출 |
+| `missing-video` | YouTube/플랫폼 검색 → `farm_evidence_run` + `farm_sample_frames` → 자막/프레임 읽기 → finding 등록. 검색 후 무관하면 "searched [query], not material" 기록 |
 | `echoed-claims` | 복붙 에코를 독립 호스트/다른 모달리티의 증거로 교체·통합 |
 | `echoed-predictions` | 중복 예측 제거 — 서로 다른 falsifiable 예측만 |
 | `no-net-independent-convergence` | 독립 호스트 확증 추가, 또는 반증이 우세하면 가설 약화/폐기 |
@@ -98,16 +153,17 @@ Then seal the load-bearing PUBLIC bytes through the farm cite-or-fail gate (brow
 - **독립성 ≥3, self 제외.** 2-host 수렴(특히 1개가 *주체 자신*의 페이지/보도자료)은 ALPHA 아님 — 깔끔해 보이는 "글로벌 1위·>90% 점유" 류 단일출처 주장이 정확히 여기서 걸린다(측정됨). 코드는 호스트만 세니, "그중 하나가 주체 자신인가"는 네가 판단.
 - **Wall escalation** (web_quality label): `JS_WALL` → farm browser RENDER (login-free); `BOT_WALL` → stop / reroute
   (no bypass); `LOGIN_WALL` → excluded; `DOWNLOAD_ONLY` → download + local parse. Never silently retreat to 2차 text.
-- **EARN a 2nd modality** (don't stamp single-modality RECON and stop). Modality class is by FILE TYPE: an authority
-  page (gov R&D / disclosure / patent portal, *any* locale) fetched as html is `web`, NOT `structured`. To make the
-  authority leg COUNT (→ ALPHA): EXTRACT the rows/fields and `ingest` them as `.json`/`.csv` (structured), or save an
-  official-doc PDF/screenshot. `RECON: single-modality` usually means "go earn the structured leg," not "hopeless."
+- **EARN the missing data shape** (don't stamp single-modality RECON and stop). See "Evidence budget and data-shape
+  floor" above for per-shape minimums. Shape is defined by ARTIFACT TYPE: an official HTML page is `unstructured`
+  until you extract rows/fields into `.json`/`.csv` (→ structured) or save a PDF/screenshot (→ semi-structured).
+  `RECON: missing-*` tells you exactly which shape to earn next — see the RECON remediation table.
 - **cite-or-fail.** Only fetched bytes + verbatim quote. gate=OK proves the quote EXISTS in bytes, not that it's true.
 - **Two-brain.** Code = nouns + counts (triangulate) + a label against an OVERRIDABLE definition. "Is this alpha /
   why hidden / when does it decay / where to dig / what's the remedy" = YOU. No immovable methodology in the spine.
 - **Continuous = the validation engine.** Every pick registers a `predict`; resolving them over weeks/months earns
   the right to claim the alpha is real (grade_validity at N≥20).
-- **Stakes gate EFFORT.** A single-modality 1-pass scrape of a published roundup is RECON, not alpha — the digest
-  says so, and at `--stakes high` adds an EFFORT-SHORTFALL warning when the shortfall is BEYOND single-modality.
+- **Stakes gate EFFORT.** A single-modality 1-pass scrape of a published roundup is RECON, not alpha. At `--stakes
+  high`, 50-100 candidate public evidence items and the three-shape floor are the expected effort unless the public
+  corpus is demonstrably smaller.
 - **Don't out-volume / out-polish a weak input.** The conclusion's grade = the grade of its load-bearing input;
   more findings/words can't raise it. For high stakes, escalate to a structured-authority modality before sealing.
