@@ -38,8 +38,20 @@ Pick exactly ONE executor per source, run it, then seal the load-bearing claims 
    a falsifiable prediction, refined across passes; login EXCLUDED). Use when the answer is an INFERENCE from many
    scattered public clues, not a lookup.
 
+## 소스/플랫폼 선택 (트래픽·점유율 기반 · 라이브 · 자가갱신 — 고정 목록 금지)
+**영원한 플랫폼은 없다.** 스킬에 "틱톡/X/IG/유튜브…" 고정 리스트를 박으면 *그 순간 늙는다* — 새 서비스가 떠도 구시대를 뒤진다. 그래서 이 스킬은 **목록(DATA)을 담지 않고 찾는 법(METHOD)만** 담는다:
+1. **런타임 발견** — 조사 시작 시 "현재 이 **도메인·지역(locale)**에서 트래픽/점유율 상위 플랫폼·소스"를 LIVE로 발견. 랭킹 소스 **≥2개를 교차**(방문자/검색량/MAU/점유율 통계), 수치는 **cite-or-fail**. 단일 랭킹 사이트도 박지 마라 — 그것도 늙는다 → 일반 검색으로 현재 랭킹을 *발견*해 삼각측량.
+2. **날짜 캐시 + TTL** — 발견 결과를 captured-at과 함께 ledger(또는 `<project>/cache/sources.json`)에 저장. 다음 런은 **TTL(기본 ~30일, 트렌드면 더 짧게 — half-life 참조) 내면 재사용, 지나면 자동 재발견.**
+3. **top-N + locale 라우팅** — 상위 N개 + 지역 보정으로 어느 플랫폼을 어느 executor(위 트리)로 보낼지 결정. **새 플랫폼이 랭킹에 들면 자동 편입, 죽은 건 자동 탈락.**
+4. **우아한 강등** — 전용 추출기 없는 신규 플랫폼도 farm 범용 캡처(스크린샷/텍스트/HTML)로 잡힌다 — 안 보이는 게 아니라 덜 풍부할 뿐.
+5. **트렌드 전파 역할은 *역할*로, *고정 순위* 아님** — "원발→증폭→종착"의 역할 구조(예: 숏폼 원발 → 릴스/숏츠 증폭 → 롱폼 종착, X=실시간 담론)는 heuristic이니 **현재 점유율로 매 런 재확인**(과거 숫자 받아쓰기 금지). locale별 차이도 라이브로(예: 한국은 글로벌과 점유율이 다름).
+
+> **"매번 CLI 켜서 스킬 업글?" — 아니.** 업데이트 = **캐시 만료 → 자동 재발견**. 플랫폼이 바뀌어도 스킬은 그대로(METHOD 불변), DATA만 라이브로 갱신. 수동 스킬 수정은 *찾는 법*이 바뀔 때만. (선택: `/schedule` 루틴으로 랭킹 캐시 주기적 예열.)
+
 ## Invariants (every route)
 - **One skill per source.** Never run light + heavy on the same clip.
+- **No frozen platform/source list.** Discover top sources by live traffic/share (≥2 triangulated, cited); cache
+  dated with a TTL; re-discover on staleness. Hardcode only structural primitives, never *which platforms matter*.
 - **Seal the load-bearing few, not everything.** Register exact bytes → `farm_add_claim` (anchor = verbatim
   quote) → `farm_run_claim_gate` → `farm_export_bundle`. The farm is the VERIFIER, never the understanding
   engine. (An MCP server cannot call skills — YOU dispatch and YOU drive the farm tools.)
