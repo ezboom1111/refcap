@@ -1224,7 +1224,7 @@ def digest(rdir):
         meta = json.load(_fh)
     L = [f"# RESEARCH DIGEST: {meta['goal']}", "", f"## 수집 증거 ({len(arts)})"]
     for a in arts:
-        L.append(f"- [{a['type']}] {a['source']}  (gate={a.get('quality_label')}, sha={a.get('sha256','')[:12]})")
+        L.append(f"- [{a.get('type')}] {a.get('source')}  (gate={a.get('quality_label')}, sha={(a.get('sha256') or '')[:12]})")
     L.append(f"\n## findings (OBSERVED first)")
     for f in sorted(finds, key=lambda x: x["label"]):
         L.append(f"- ({f['label']}) {f['text']}  <-{f['artifact_id']}@{f.get('locator')}")
@@ -1251,7 +1251,7 @@ def digest(rdir):
                  f"/ premature {cal['n_premature']} / brier {cal['brier_all']})")
         for p in pr:
             dupmark = f"  (dup of {p['near_duplicate_of']})" if p.get("near_duplicate_of") else ""
-            L.append(f"- (conf {p.get('stated_confidence')}, by {p.get('resolve_by')}) {p.get('claim', '')[:100]}{dupmark}")
+            L.append(f"- (conf {p.get('stated_confidence')}, by {p.get('resolve_by')}) {(p.get('claim') or '')[:100]}{dupmark}")
     L.append(f"\n## 남은 frontier ({len(st['open'])})")
     for o in st["open"]:
         L.append(f"- [ ] {o}")

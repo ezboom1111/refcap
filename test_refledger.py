@@ -229,6 +229,28 @@ class TestFarmPlan(unittest.TestCase):
         self.assertIn(".vtt", regs[0]["args"].get("vttPath", ""))
 
 
+class TestDigestRobustness(unittest.TestCase):
+    """digest must not crash on real-world artifacts whose sha256 is explicitly None (e.g. farm frame samples).
+    Regression: `a.get('sha256','')[:12]` returned None (key present, value None) -> None[:12] TypeError."""
+    def setUp(self):
+        self.d = tempfile.mkdtemp(); self.r = R.open_research("dg", base=self.d)
+
+    def tearDown(self):
+        shutil.rmtree(self.d, ignore_errors=True)
+
+    def test_digest_survives_none_sha_artifact_and_renders_hypothesis_and_prediction(self):
+        a = R.ledger_append(self.r, type="image", source="local/frame.png", method="frame",
+                            path="local/frame.png", sha256=None, quality_label="OK")
+        hid = R.set_hypothesis(self.r, "X is a hidden powerhouse", stakes="med")["hypothesis_id"]
+        R.record_finding(self.r, "signal", "OBSERVED", a["artifact_id"], quote="q",
+                         hypothesis_id=hid, polarity="confirms")
+        R.predict(self.r, "X beats its record by 2027", 0.6, "2027-06-30", hypothesis_id=hid)
+        out = R.digest(self.r)                       # must NOT raise
+        txt = open(out, encoding="utf-8").read()
+        self.assertIn("X is a hidden powerhouse", txt)   # the INFERENCE is rendered
+        self.assertIn("X beats its record by 2027", txt)  # the FORECAST is rendered alongside
+
+
 class TestDetectType(unittest.TestCase):
     def test_inline_dispatch_extension_and_scheme_only(self):  # depth-0, NO content branching
         self.assertEqual(R.detect_type("a.mp4"), "video")
