@@ -81,6 +81,42 @@ class Harvest(unittest.TestCase):
         self.assertEqual(res["alpha_count"], 1)
         self.assertEqual(res["recon_count"], 1)
 
+    def test_prediction_read_from_predictions_jsonl(self):   # regression: was read from ledger.jsonl -> always 0
+        rdir = self._build_run("with pred", [("https://a.com/1", "html", "confirms")], "RECON")
+        hid = R._read_jsonl(os.path.join(rdir, "ledger.jsonl"))
+        hid = [r for r in hid if r.get("kind") == "hypothesis"][0]["hypothesis_id"]
+        R.predict(rdir, "a falsifiable claim", 0.6, "2027-06-30", hypothesis_id=hid)
+        res = HC.harvest()
+        run = [r for r in res["runs"] if r["slug"] == os.path.basename(rdir)][0]
+        self.assertTrue(run["has_prediction"])
+        self.assertEqual(res["common_recon_gaps"].get("no-prediction", 0), 0)   # gap must NOT fire
+
+    def test_no_prediction_gap_fires_only_when_truly_absent(self):
+        self._build_run("nopred", [("https://x.com/1", "html", "confirms")], "RECON")   # no predict() call
+        res = HC.harvest()
+        self.assertEqual(res["common_recon_gaps"].get("no-prediction", 0), 1)
+
+    def test_since_filter_excludes_future_cutoff(self):   # regression: --since was silently ignored
+        self._build_run("dated", [("https://a.com/1", "html", "confirms")], "ALPHA")
+        self.assertEqual(HC.harvest(since="2099-01-01")["total_runs"], 0)
+        self.assertEqual(HC.harvest(since="2000-01-01")["total_runs"], 1)
+
+    def test_single_modality_gap_ignores_other_class(self):   # regression: 'other' (ocr/text) inflated mod count
+        # one real modality (web) + one 'other' (ocr type, absent from _MODALITY_CLASS) -> still single-modality
+        self._build_run("mods", [("https://a.com/1", "html", "confirms"),
+                                 ("https://b.com/2", "ocr", "confirms")], "RECON")
+        res = HC.harvest()
+        self.assertEqual(res["common_recon_gaps"].get("single-modality", 0), 1)
+
+    def test_corrections_do_not_mutate_runs_entries(self):   # regression: slug injected into runs[].corrections
+        self._build_run("clean", [("https://a.com/1", "html", "confirms"),
+                                  ("https://b.go.kr/2", "json", "confirms"),
+                                  ("https://c.org/3", "html", "confirms")], "ALPHA")
+        res = HC.harvest()
+        for run in res["runs"]:
+            for c in run.get("corrections", []):
+                self.assertNotIn("slug", c)   # the run's own correction dicts stay clean
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -74,16 +74,32 @@ class IndependenceGate(unittest.TestCase):
         self.assertTrue(any("echo-clusters" in s for s in h["issues"]))
 
     def test_host_concentration_blocks_pass(self):
+        # Must reach >=3 independent hosts so the label is ALPHA — otherwise thin-independence (not concentration)
+        # is what fails, and the concentration gate is never exercised in isolation.
         hid = R.set_hypothesis(self.r, "concentrated thesis", stakes="med")["hypothesis_id"]
-        # 3 of 4 confirming findings from one host (>50%) but distinct text -> concentration, not echo
-        self._confirm(hid, "https://dom.com/a", "html", "alpha aaa unique sentence number one here")
-        self._confirm(hid, "https://dom.com/b", "json", "beta bbb totally different content two here")
-        self._confirm(hid, "https://dom.com/c", "html", "gamma ccc yet another distinct line three")
-        self._confirm(hid, "https://other.org/d", "html", "delta ddd from a separate independent host")
-        R.predict(self.r, "claim", 0.6, "2027-06-30", hypothesis_id=hid)
+        self._confirm(hid, "https://dom.com/a", "html", "alpha unique sentence number primary content here today")
+        self._confirm(hid, "https://dom.com/b", "json", "beta totally separate structured datapoint second item there")
+        self._confirm(hid, "https://dom.com/c", "html", "gamma yet another distinct independent line third entry now")
+        self._confirm(hid, "https://dom.com/d", "html", "delta fourth distinct dominant-host paragraph extra weight added")
+        self._confirm(hid, "https://second.org/e", "json", "epsilon from a genuinely separate independent host org")
+        self._confirm(hid, "https://third.net/f", "html", "zeta from a third distinct independent host domain")
+        R.predict(self.r, "claim about the niche leader", 0.6, "2027-06-30", hypothesis_id=hid)
         h = VI.validate_independence(self.r, hid)["hypotheses"][0]
+        self.assertEqual(h["independent_hosts"], 3)            # 3 hosts -> NOT thin-independence
+        self.assertEqual(h["label"], "ALPHA")                 # label clears; concentration is the SOLE blocker
         self.assertFalse(h["pass"])
-        self.assertTrue(any("host-concentration" in s for s in h["issues"]))
+        self.assertTrue(any("host-concentration" in s for s in h["issues"]), h["issues"])
+
+    def test_echo_detection_is_order_independent(self):   # regression: asymmetric denominator flipped on order
+        long = {"text": "global semiconductor giant raises annual revenue forecast citing strong data center demand surge", "polarity": "confirms"}
+        short = {"text": "global semiconductor giant raises annual revenue forecast citing strong data center demand surge today", "polarity": "confirms"}
+        self.assertEqual(len(VI._detect_echo_clusters([long, short])),
+                         len(VI._detect_echo_clusters([short, long])))
+
+    def test_single_word_finding_is_not_a_false_echo(self):   # regression: denominator=1 false positive
+        sigs = [{"text": "revenue", "polarity": "confirms"},
+                {"text": "the quarterly revenue figures released alongside production output data analyst notes", "polarity": "confirms"}]
+        self.assertEqual(VI._detect_echo_clusters(sigs), [])
 
     def test_missing_ledger_returns_error(self):
         res = VI.validate_independence(os.path.join(self.d, "no_such"))

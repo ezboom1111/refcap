@@ -65,7 +65,7 @@ class Budget(unittest.TestCase):
     def _art(self, src, typ):
         p = os.path.join(self.r, "a_" + R.sha256_bytes((src + typ).encode())[:8] + ".txt")
         with open(p, "w", encoding="utf-8") as f:
-            f.write("ev")
+            f.write("ev " + src)   # unique per source (no artificial sha collisions)
         return R.ledger_append(self.r, type=typ, source=src, method="m", path=p,
                                canonical_path=p, sha256=R.sha256_file(p), quality_label="OK")
 
@@ -109,6 +109,53 @@ class Budget(unittest.TestCase):
         res = CS.check_shapes(os.path.join(self.d, "no_such_dir"))
         self.assertFalse(res["pass"])
         self.assertIn("error", res)
+
+    def test_low_stakes_fails_when_unstructured_shape_below_floor(self):   # per-shape floor isolated from total
+        hid = R.set_hypothesis(self.r, "thesis", stakes="low")["hypothesis_id"]
+        for i in range(2):
+            self._find(f"https://h{i}.com/", "html", hid)     # 2 unstructured (< 3 per-shape)
+        for i in range(12):
+            self._find(f"https://api{i}.com/", "json", hid)   # 12 structured -> total floor met
+        res = CS.check_shapes(self.r)
+        self.assertFalse(res["pass"])
+        self.assertTrue(any("missing-unstructured" in s for s in res["issues"]), res["issues"])
+
+    def test_dangling_findings_do_not_fake_a_pass(self):   # regression: orphan artifact_id -> {} -> 'unstructured'
+        R.set_hypothesis(self.r, "thesis", stakes="low")
+        ledger = os.path.join(self.r, "ledger.jsonl")
+        import json
+        with open(ledger, "a", encoding="utf-8") as f:
+            for i in range(13):
+                f.write(json.dumps({"kind": "finding", "artifact_id": "a_ghost", "text": f"o{i}",
+                                    "label": "OBSERVED", "polarity": "confirms"}) + "\n")
+        res = CS.check_shapes(self.r)
+        self.assertFalse(res["pass"])
+        self.assertEqual(res["total_findings"], 0)            # dangling are NOT counted as real evidence
+        self.assertEqual(res["dangling_findings"], 13)
+        self.assertTrue(any("dangling-findings" in s for s in res["issues"]))
+
+    def test_multi_hypothesis_uses_highest_declared_stakes(self):   # regression: was hypotheses[-1]
+        hA = R.set_hypothesis(self.r, "thesis A", stakes="low")["hypothesis_id"]
+        for i in range(15):
+            self._find(f"https://h{i}.com/", "html", hA)
+        R.set_hypothesis(self.r, "thesis B", stakes="high")   # appended last, zero findings
+        res = CS.check_shapes(self.r)
+        self.assertEqual(res["stakes"], "high")               # conservative: highest among distinct theses
+        self.assertEqual(res["stakes_source"], "hypothesis")
+
+    def test_no_hypothesis_surfaces_undeclared_not_silent_low(self):   # regression: silent low-budget PASS
+        for i in range(15):
+            self._find(f"https://h{i}.com/", "html")          # no hypothesis, no override
+        res = CS.check_shapes(self.r)
+        self.assertFalse(res["pass"])
+        self.assertEqual(res["stakes_source"], "undeclared")
+        self.assertTrue(any("stakes-undeclared" in s for s in res["issues"]))
+
+    def test_over_budget_does_not_fail(self):   # max is advisory; thoroughness isn't punished
+        hid = R.set_hypothesis(self.r, "thesis", stakes="low")["hypothesis_id"]
+        for i in range(50):                                   # well over low max (~20)
+            self._find(f"https://h{i}.com/", "html", hid)
+        self.assertTrue(CS.check_shapes(self.r)["pass"])
 
 
 if __name__ == "__main__":

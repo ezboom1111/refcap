@@ -10,22 +10,34 @@ metadata:
 # RECON remediation
 
 Read this file when `digest` stamps `[RECON]`, OR when `check_shapes.py` / `validate_independence.py` exit 1.
-The reason strings below match those validators' output exactly (`missing-<shape>`, `single-modality`,
-`low-independence`, `echo-clusters`, `host-concentration`). Match the reason and apply its prescription.
+The **Reason** column below is the EXACT substring the validators emit in their `issues` list — match on that
+substring (counts in parens vary, e.g. `thin-independence(1<3)`), then apply the prescription.
 
 ## RECON reasons and prescriptions
 
-| Reason | What it means | Remediation (next pass) |
-|---|---|---|
-| `missing-structured` | <3 structured artifacts (CSV/JSON/API from official DBs) | Query DART, KIPRIS, NTIS, exchange APIs, patent DBs. Extract to typed file. Don't repackage news numbers into JSON. |
-| `missing-semi-structured` | <3 semi-structured artifacts (PDF tables, dashboard captures) | Find analyst reports, government dashboards, financial statements. Extract labeled tables/values. |
-| `missing-video` | <3 video artifacts despite relevant content existing | YouTube/platform search → `farm_evidence_run` + `farm_sample_frames` + ASR/captions. Register frames + transcript. |
-| `missing-ocr` | <3 OCR artifacts when the domain involves image-based docs | Find scanned PDFs, infographics, presentation slides. Extract text via OCR tools. |
-| `single-modality` | All findings from one data shape only | Diversify: add the missing shapes per the budget table in `evidence-budget.md`. |
-| `low-independence` | <3 independent eTLD+1 hosts among confirming findings | Find sources from different organizations/domains. Same-org mirror sites don't count. |
-| `no-disconfirm` | Zero `disconfirms` or `neutral` findings | Actively search for counter-evidence. "Why might this thesis be wrong?" |
-| `echo-cluster` | Multiple findings trace to the same original source (press release echo) | Find primary sources, not derivative coverage. Check bylines and dates. |
-| `effort-shortfall` | Stakes declared as high/med but effort matches low | Increase candidate count and shape coverage to match declared stakes. |
+These appear in the `issues` list emitted by `check_shapes.py` (shape budget) and `validate_independence.py`
+(independence/echo). The parenthesised counts are dynamic; match the prefix.
+
+| Reason (issues substring) | Emitter | What it means | Remediation (next pass) |
+|---|---|---|---|
+| `missing-structured(N<M)` | check_shapes | <min structured artifacts (CSV/JSON/API from official DBs) | Query DART, KIPRIS, NTIS, exchange APIs, patent DBs. Extract to typed file. Don't repackage news numbers into JSON. |
+| `missing-semi-structured(N<M)` | check_shapes | <min semi-structured artifacts (PDF tables, dashboard captures) | Find analyst reports, government dashboards, financial statements. Extract labeled tables/values. |
+| `missing-video(N<M)` | check_shapes | <min video artifacts despite relevant content existing | YouTube/platform search → `farm_evidence_run` + `farm_sample_frames` + ASR/captions. Register frames + transcript. |
+| `missing-ocr(N<M)` | check_shapes | <min OCR artifacts when the domain involves image-based docs | Find scanned PDFs, infographics, presentation slides. Extract text via OCR tools. |
+| `total-candidates(N<M)` | check_shapes | total genuine findings below the stakes floor | Collect more across the missing shapes (not more of the same). |
+| `dangling-findings(N)` | check_shapes | findings whose artifact row is missing from the ledger | Re-register the cited bytes; the spine's `verify()` also fails on these. |
+| `stakes-undeclared(...)` | check_shapes | no hypothesis declared and no `--stakes` override → effort can't be gated | Run `set_hypothesis ... --stakes` first (loop step 1), or pass `--stakes`. |
+| `single-modality` | validate_independence | confirming findings span <2 modality classes | Diversify shapes per the budget table in `evidence-budget.md`. |
+| `thin-independence(N<M)` | validate_independence | <M independent eTLD+1 hosts among confirming findings | Find sources from different organizations/domains. Same-org mirror sites don't count. |
+| `echo-clusters(N)` | validate_independence | N clusters of near-identical findings (press-release echo) | Find primary sources, not derivative coverage. Check bylines and dates. |
+| `host-concentration(host=K/T)` | validate_independence | >50% of confirming findings from one host | Spread across more independent domains; the dominant host is over-weighted. |
+| `echoed-claims(N->M)` | validate_independence (via spine) | N raw confirming claims collapse to M distinct (copy-paste echoes) | Replace echoes with genuinely distinct sources. |
+| `no-falsifiable-prediction` | validate_independence (via spine) | no distinct `predict()` tied to the thesis | Register a `predict(... --by <date>)` — the falsifiable bet. |
+
+**Advisory signals (NOT in the `issues` list — surfaced elsewhere):**
+- **`has_disconfirm: false`** (a boolean field in `validate_independence` output) — zero `disconfirms` findings. Not a hard gate, but a pure-confirmation thesis is weak: actively search counter-evidence ("why might this be wrong?").
+- **`warning: "HIGH-STAKES EFFORT SHORTFALL"`** (the `warning` field, not `issues`) — stakes=high but an egregious convergence/quality miss. Increase candidate count + shape coverage to match the declared stakes.
+- **digest `[RECON: ...]` stamp** — refledger's own advisory label (modality/host/echo/prediction only; it does NOT know the shape budget — that's `check_shapes.py`'s job).
 
 ## Pass termination rules
 

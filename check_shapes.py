@@ -64,33 +64,54 @@ def check_shapes(rdir, stakes_override=None):
     rows = _read_jsonl(ledger_path)
     arts = {r["artifact_id"]: r for r in rows if r.get("kind") == "artifact"}
     findings = [r for r in rows if r.get("kind") == "finding"]
-    hypotheses = [r for r in rows if r.get("kind") == "hypothesis"]
+    # Last row WINS per hypothesis_id (stakes is mutable metadata, re-appended) — mirror digest()'s hyps_latest,
+    # NOT hypotheses[-1] which would pick a later UNRELATED thesis's stakes.
+    hyps_latest = {}
+    for r in rows:
+        if r.get("kind") == "hypothesis":
+            hyps_latest[r["hypothesis_id"]] = r
 
-    stakes = stakes_override or ""
-    if not stakes and hypotheses:
-        stakes = hypotheses[-1].get("stakes", "low") or "low"
-    if stakes not in BUDGET:
+    issues = []
+    _RANK = {"low": 0, "med": 1, "high": 2}
+    if stakes_override in BUDGET:
+        stakes = stakes_override
+        stakes_source = "override"
+    elif hyps_latest:
+        # Conservative: among DISTINCT theses, gate at the HIGHEST declared stakes (an unspecified '' floors to low).
+        stakes = max((h.get("stakes") or "low" for h in hyps_latest.values()),
+                     key=lambda s: _RANK.get(s, 0))
+        stakes = stakes if stakes in BUDGET else "low"
+        stakes_source = "hypothesis"
+    else:
+        # No hypothesis declared and no override → effort cannot be gated. Surface it LOUDLY (don't silently PASS
+        # a high-stakes dig that forgot set_hypothesis); default the budget to low only to still report shapes.
         stakes = "low"
+        stakes_source = "undeclared"
+        issues.append("stakes-undeclared(no-hypothesis,no-override)")
 
     budget = BUDGET[stakes]
 
     shape_counts = {}
-    shape_findings = {}
+    dangling = 0
     for f in findings:
         aid = f.get("artifact_id", "")
-        art = arts.get(aid, {})
-        shape = _classify_shape(art)
+        if aid not in arts:
+            # Dangling anchor (artifact row missing) — the spine's verify() already fails on this. Do NOT let it
+            # masquerade as a real 'unstructured' artifact and inflate the floor into a fabricated PASS.
+            dangling += 1
+            continue
+        shape = _classify_shape(arts[aid])
         shape_counts[shape] = shape_counts.get(shape, 0) + 1
-        shape_findings.setdefault(shape, []).append(f)
 
-    total = len(findings)
+    total = sum(shape_counts.values())   # genuine (non-dangling) findings only
     total_min, total_max = budget["total"]
 
-    issues = []
+    if dangling:
+        issues.append(f"dangling-findings({dangling})")
     if total < total_min:
         issues.append(f"total-candidates({total}<{total_min})")
 
-    for req_shape in budget["required"]:
+    for req_shape in sorted(budget["required"]):
         count = shape_counts.get(req_shape, 0)
         if count < budget["min_per_shape"]:
             issues.append(f"missing-{req_shape}({count}<{budget['min_per_shape']})")
@@ -99,8 +120,13 @@ def check_shapes(rdir, stakes_override=None):
     return {
         "pass": passed,
         "stakes": stakes,
+        "stakes_source": stakes_source,
         "total_findings": total,
-        "budget_range": list(budget["total"]),
+        "dangling_findings": dangling,
+        # NOTE: budget_min is the enforced floor. The upper end (total_max) is ADVISORY — over-collecting is not a
+        # failure (thoroughness isn't punished; quality, not volume, is the agent's call), so it never sets pass=False.
+        "budget_min": total_min,
+        "budget_max_advisory": total_max,
         "min_per_shape": budget["min_per_shape"],
         "shape_counts": shape_counts,
         "required_shapes": sorted(budget["required"]),
@@ -122,8 +148,9 @@ def main():
         print(f"[ERROR] {result['error']}")
     else:
         status = "PASS" if result["pass"] else "FAIL"
-        print(f"[{status}] stakes={result['stakes']} findings={result['total_findings']} "
-              f"budget={result['budget_range']}")
+        print(f"[{status}] stakes={result['stakes']}({result['stakes_source']}) "
+              f"findings={result['total_findings']} floor={result['budget_min']} "
+              f"(max~{result['budget_max_advisory']})")
         print(f"  shapes: {result['shape_counts']}")
         if result.get("issues"):
             print(f"  issues: {', '.join(result['issues'])}")

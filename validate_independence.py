@@ -14,32 +14,39 @@ from collections import Counter
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-from refledger import _read_jsonl, _host, triangulate, alpha_label, _MODALITY_CLASS, _resolve, _distinct_pred_count
+from refledger import (_read_jsonl, _host, triangulate, alpha_label, _MODALITY_CLASS, _resolve,
+                       _distinct_pred_count, _jaccard, _shingles, _NEAR_DUP_SIM)
 
 MIN_INDEPENDENT_HOSTS = 3
 MIN_MODALITIES = 2
 
 
-def _detect_echo_clusters(signals):
-    """Detect signals that are likely echoes of the same press release / wire service.
-    Groups by similar text content and flags clusters > 2 with same-day timestamps."""
-    from datetime import datetime
+def _text_similarity(a, b):
+    """SYMMETRIC near-identity score, reusing the spine's 3-gram Jaccard (the same measure triangulate uses to
+    collapse echoes). Order-independent and length-fair — unlike the old `intersection / len(text_i)` which keyed
+    the denominator on whichever signal came first (a long-vs-subset pair flipped result on insertion order, and a
+    single-word text forced denominator=1 → false echo)."""
+    return _jaccard(_shingles(a), _shingles(b))
 
+
+def _detect_echo_clusters(signals, cutoff=_NEAR_DUP_SIM):
+    """Detect signals that are likely echoes of the same press release / wire service: confirming findings whose
+    text is near-IDENTICAL (3-gram Jaccard >= cutoff, the spine's _NEAR_DUP_SIM). Symmetric, so the cluster is the
+    same regardless of ledger insertion order."""
     clusters = []
     used = set()
     for i, s in enumerate(signals):
         if i in used:
             continue
         cluster = [i]
-        text_i = s.get("text", "")[:100].lower()
-        for j, t in enumerate(signals):
-            if j <= i or j in used:
+        text_i = s.get("text", "")
+        for j in range(i + 1, len(signals)):
+            if j in used:
                 continue
-            text_j = t.get("text", "")[:100].lower()
+            text_j = signals[j].get("text", "")
             if not text_i or not text_j:
                 continue
-            overlap = len(set(text_i.split()) & set(text_j.split())) / max(len(text_i.split()), 1)
-            if overlap > 0.6:
+            if _text_similarity(text_i, text_j) >= cutoff:
                 cluster.append(j)
         if len(cluster) > 1:
             for idx in cluster:

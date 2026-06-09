@@ -9,7 +9,9 @@ metadata:
 
 # Evidence budget and data-shape floor
 
-Read this file when planning the shape matrix (loop step 2) or when `digest` flags a shape gap.
+Read this file when planning the shape matrix (loop step 2) or when `check_shapes.py` flags a shape gap.
+(Note: refledger's `digest` stamp knows modality/host/echo/prediction only — it does NOT enforce the shape
+budget below. `check_shapes.py` is what emits `missing-<shape>`.)
 
 ## Data shapes defined (shape = artifact type, not source type)
 
@@ -32,13 +34,16 @@ table extracted to `.csv` = structured. Earn the shape by producing the artifact
 | **med** | 30–50 | unstructured + semi + structured | ≥3 items each |
 | **high** | 50–100 | ALL five shapes | ≥5 items each |
 
-- "candidates" = `record_finding` calls across ALL shapes, not just web hits.
+- "candidates" = genuine (non-dangling) `record_finding` calls across ALL shapes, not just web hits.
 - One-item shapes are checkbox compliance, not real diversity.
-- `digest` flags `RECON: missing-<shape>` when a required shape has <3 items.
+- `check_shapes.py` flags `missing-<shape>(N<min)` when a required shape is below its floor.
+- The upper end of the candidate range is ADVISORY — over-collecting is not a failure (quality, not volume, is
+  the agent's judgment). Only the floor (`budget_min`) and per-shape minimums gate the PASS.
 
-**This table is mechanically enforced.** Run `python check_shapes.py <run_dir>` — it reads the ledger, infers
-stakes from the hypothesis (or `--stakes` override), and exits 1 with `missing-<shape>(N<min)` for any unmet
-floor. Don't eyeball the budget; run the gate.
+**This table is mechanically enforced.** Run `python check_shapes.py <run_dir>` — it reads the ledger, gates at
+the HIGHEST declared `--stakes` among the run's hypotheses (or a `--stakes` override; `stakes-undeclared` if
+neither), skips dangling findings, and exits 1 with `missing-<shape>(N<min)` for any unmet floor. Don't eyeball
+the budget; run the gate.
 
 ## Video/audio/OCR decision protocol (not optional-by-default)
 

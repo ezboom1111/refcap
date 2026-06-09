@@ -78,6 +78,47 @@ class Staleness(unittest.TestCase):
         self.assertEqual(fm["name"], "p")
         self.assertIn("last_verified", fm)
 
+    def test_exactly_ttl_days_old_is_stale(self):   # regression: boundary off-by-one (was lv < cutoff)
+        self._skill("edge", (self._today() - timedelta(days=30)).isoformat())
+        res = SS.check_staleness(ttl_days=30)
+        self.assertEqual(res["skills"][0]["status"], "stale")
+        self.assertFalse(res["pass"])
+
+    def test_fixed_skill_reports_today_not_old_date(self):   # regression: return dict carried the pre-fix date
+        self._skill("rep", (self._today() - timedelta(days=99)).isoformat())
+        res = SS.check_staleness(ttl_days=30, fix=True)
+        self.assertEqual(res["skills"][0]["status"], "fixed")
+        self.assertEqual(res["skills"][0]["last_verified"], self._today().isoformat())
+
+    def test_empty_last_verified_value_does_not_eat_closing_delimiter(self):   # regression: --- corruption
+        d = os.path.join(self.skills, "empty")
+        os.makedirs(d)
+        p = os.path.join(d, "SKILL.md")
+        with open(p, "w", encoding="utf-8") as f:
+            f.write("---\nname: empty\nlast_verified:\n---\n\n# empty\nbody\n")
+        SS.check_staleness(ttl_days=30, fix=True)
+        with open(p, encoding="utf-8") as f:
+            content = f.read()
+        self.assertIn("\n---\n", content)                       # closing delimiter survived
+        fm, _ = SS._parse_frontmatter(p)
+        self.assertEqual(fm.get("last_verified"), self._today().isoformat())
+
+    def test_fix_preserves_folded_yaml_block(self):   # real SKILL.md uses description: >- folded blocks
+        d = os.path.join(self.skills, "folded")
+        os.makedirs(d)
+        p = os.path.join(d, "SKILL.md")
+        with open(p, "w", encoding="utf-8") as f:
+            f.write("---\nname: folded\ndescription: >-\n  line one\n  line two\n"
+                    "last_verified: 2020-01-01\n---\n\n# folded\nbody\n")
+        SS.check_staleness(ttl_days=30, fix=True)
+        fm, _ = SS._parse_frontmatter(p)
+        self.assertEqual(fm.get("last_verified"), self._today().isoformat())
+        with open(p, encoding="utf-8") as f:
+            content = f.read()
+        self.assertIn("description: >-", content)               # folded block intact
+        self.assertIn("  line one", content)
+        self.assertIn("  line two", content)
+
 
 if __name__ == "__main__":
     unittest.main()

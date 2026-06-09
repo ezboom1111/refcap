@@ -36,8 +36,11 @@ def _parse_frontmatter(path):
 def _update_last_verified(path, today_str):
     with open(path, "r", encoding="utf-8") as f:
         content = f.read()
-    if "last_verified:" in content:
-        content = re.sub(r"last_verified:\s*\S+", f"last_verified: {today_str}", content)
+    # Anchor to a LINE (^...$, MULTILINE) and rewrite only the value to end-of-line — NOT `\s*\S+`, whose `\s*`
+    # crossed the newline and `\S+` swallowed the YAML closing `---` when the value was empty (unrecoverable
+    # corruption). count=1 so a literal `last_verified:` in the body/docs is never touched.
+    if re.search(r"(?m)^last_verified:.*$", content):
+        content = re.sub(r"(?m)^last_verified:.*$", f"last_verified: {today_str}", content, count=1)
     else:
         content = content.replace("\n---\n", f"\nlast_verified: {today_str}\n---\n", 1)
     with open(path, "w", encoding="utf-8") as f:
@@ -47,7 +50,6 @@ def _update_last_verified(path, today_str):
 def check_staleness(ttl_days=DEFAULT_TTL_DAYS, fix=False):
     today = datetime.now(timezone.utc).date()
     today_str = today.isoformat()
-    cutoff = today - timedelta(days=ttl_days)
 
     results = []
     skill_files = glob.glob(os.path.join(SKILLS_DIR, "*/SKILL.md"))
@@ -65,7 +67,8 @@ def check_staleness(ttl_days=DEFAULT_TTL_DAYS, fix=False):
             try:
                 lv_date = datetime.strptime(last_verified.strip("'\""), "%Y-%m-%d").date()
                 age_days = (today - lv_date).days
-                stale = lv_date < cutoff
+                # "Max days since last_verified" → reaching the TTL (age == ttl) IS stale, not just exceeding it.
+                stale = age_days >= ttl_days
                 status = "stale" if stale else "fresh"
             except ValueError:
                 status = "invalid-date"
@@ -75,6 +78,8 @@ def check_staleness(ttl_days=DEFAULT_TTL_DAYS, fix=False):
         if fix and stale:
             _update_last_verified(path, today_str)
             status = "fixed"
+            last_verified = today_str   # reflect the POST-fix state in the returned dict (was the stale/None value)
+            age_days = 0
 
         results.append({
             "skill": skill_name,

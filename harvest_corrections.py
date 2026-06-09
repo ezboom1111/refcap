@@ -33,7 +33,9 @@ def _analyze_run(rdir):
     hypotheses = [r for r in rows if r.get("kind") == "hypothesis"]
     findings = [r for r in rows if r.get("kind") == "finding"]
     artifacts = {r["artifact_id"]: r for r in rows if r.get("kind") == "artifact"}
-    predictions = [r for r in rows if r.get("kind") == "prediction"]
+    # predict() writes predictions.jsonl, NOT ledger.jsonl — reading them from `rows` (ledger) always found 0 and
+    # falsely counted the no-prediction gap for every run (same class as the validate_independence fix).
+    predictions = [r for r in _read_jsonl(os.path.join(rdir, "predictions.jsonl")) if r.get("kind") == "prediction"]
 
     if not hypotheses:
         return None
@@ -100,13 +102,27 @@ def _analyze_run(rdir):
             "count": n_hosts,
         })
 
+    created = ""   # for --since filtering: prefer meta.json, fall back to the earliest ledger ts
+    meta_path = os.path.join(rdir, "meta.json")
+    if os.path.exists(meta_path):
+        try:
+            with open(meta_path, "r", encoding="utf-8") as mf:
+                created = json.load(mf).get("created", "") or ""
+        except (ValueError, OSError):
+            created = ""
+    if not created:
+        ts = [r.get("ts", "") for r in rows if r.get("ts")]
+        created = min(ts) if ts else ""
+
     return {
         "slug": slug,
         "path": rdir,
+        "created": created,
         "thesis": hypotheses[-1].get("thesis", "")[:100] if hypotheses else "",
         "stakes": hypotheses[-1].get("stakes", "") if hypotheses else "",
         "findings": len(findings),
         "modalities": dict(modality_counts),
+        "n_modalities": n_modalities,
         "hosts": n_hosts,
         "has_prediction": has_prediction,
         "has_disconfirm": has_disconfirm,
@@ -118,11 +134,25 @@ def _analyze_run(rdir):
 def harvest(since=None):
     run_dirs = glob.glob(os.path.join(RESEARCH_DIR, "r_*"))
     run_dirs += glob.glob(os.path.join(RESEARCH_DIR, "research", "r_*"))
+    # Dedup by canonical path: a stray research/research/<slug> nesting (a known historical mess) would otherwise
+    # process + double-count the same logical run.
+    seen_paths = set()
+    deduped = []
+    for rdir in sorted(run_dirs):
+        rp = os.path.normpath(os.path.realpath(rdir))
+        if rp in seen_paths:
+            continue
+        seen_paths.add(rp)
+        deduped.append(rdir)
 
     results = []
-    for rdir in sorted(run_dirs):
+    for rdir in deduped:
         analysis = _analyze_run(rdir)
         if analysis:
+            # --since: keep runs created ON/AFTER the cutoff (ISO dates compare lexically; created may be a full
+            # timestamp, so compare by the date prefix).
+            if since and (not analysis.get("created") or analysis["created"][:10] < since):
+                continue
             results.append(analysis)
 
     alpha_runs = [r for r in results if r["final_label"] == "ALPHA"]
@@ -131,15 +161,13 @@ def harvest(since=None):
     all_corrections = []
     for r in results:
         for c in r.get("corrections", []):
-            c["slug"] = r["slug"]
-            all_corrections.append(c)
+            all_corrections.append({**c, "slug": r["slug"]})   # copy — don't mutate the dict held in r["corrections"]
 
     correction_type_counts = Counter(c["type"] for c in all_corrections)
 
     common_recon_gaps = Counter()
     for r in recon_runs:
-        mods = set(r.get("modalities", {}).keys())
-        if len(mods) <= 1:
+        if r.get("n_modalities", 0) <= 1:   # use the 'other'-stripped count (consistent with modality-expansion)
             common_recon_gaps["single-modality"] += 1
         if not r.get("has_prediction"):
             common_recon_gaps["no-prediction"] += 1
