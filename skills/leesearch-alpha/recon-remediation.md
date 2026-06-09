@@ -9,7 +9,9 @@ metadata:
 
 # RECON remediation
 
-Read this file when `digest` stamps `[RECON]`. The stamp includes a reason — match it below.
+Read this file when `digest` stamps `[RECON]`, OR when `check_shapes.py` / `validate_independence.py` exit 1.
+The reason strings below match those validators' output exactly (`missing-<shape>`, `single-modality`,
+`low-independence`, `echo-clusters`, `host-concentration`). Match the reason and apply its prescription.
 
 ## RECON reasons and prescriptions
 

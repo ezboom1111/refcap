@@ -36,6 +36,10 @@ table extracted to `.csv` = structured. Earn the shape by producing the artifact
 - One-item shapes are checkbox compliance, not real diversity.
 - `digest` flags `RECON: missing-<shape>` when a required shape has <3 items.
 
+**This table is mechanically enforced.** Run `python check_shapes.py <run_dir>` — it reads the ledger, infers
+stakes from the hypothesis (or `--stakes` override), and exits 1 with `missing-<shape>(N<min)` for any unmet
+floor. Don't eyeball the budget; run the gate.
+
 ## Video/audio/OCR decision protocol (not optional-by-default)
 
 Video is not "nice to have" — for most topics, relevant video exists. The protocol:

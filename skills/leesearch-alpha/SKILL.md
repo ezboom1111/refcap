@@ -68,7 +68,17 @@ last_verified: 2026-06-09
 6. **Refine / iterate** — open leads + missing legs via `frontier_open(hypothesis_id)`; next pass adds more PUBLIC
    fragments → re-`triangulate` → convergence GROWS or a leg gets cleanly DISCONFIRMED. Keep digging.
 
-**After `digest`:** read the stamp. `[ALPHA]` → adversarial review below → seal. `[RECON]` → read
+**Before trusting the stamp, run the deterministic self-check** (the spine is threshold-free by design; the
+shape-budget + echo/independence policy lives in these skill-layer validators, NOT in refledger):
+```bash
+python check_shapes.py $SLUG              # shape budget by stakes (≥3/shape; missing-* = which shape to earn)
+python validate_independence.py $SLUG     # ≥3 independent hosts, echo-cluster + host-concentration detection
+```
+Both exit 1 on failure with the specific gap. A `digest` `[ALPHA]` that fails either validator is NOT alpha —
+treat it as RECON and read `recon-remediation.md`. (The validators catch what the spine's advisory label can't:
+the per-shape ≥3 floor and press-release echo clusters.)
+
+**After `digest` + self-check pass:** read the stamp. `[ALPHA]` → adversarial review below → seal. `[RECON]` → read
 `recon-remediation.md` for the prescription per reason, run one more pass (max +2). If stuck, ask the human.
 
 ## 적대적 반증 (alpha 출하 전 필수 — 교차모델이면 최강)
@@ -84,6 +94,8 @@ python refledger.py finding $SLUG "<signal>" OBSERVED $AID --quote "<verbatim>" 
 python refledger.py triangulate $SLUG $HID          # convergence REPORT (distinct host AND modality + distinct_claims)
 python refledger.py predict $SLUG "<falsifiable claim>" 0.6 --by 2027-06-30 --hypothesis $HID
 python refledger.py digest $SLUG                     # SUMMARY.md surfaces 가설+삼각측량+예측 + an ALPHA/RECON stamp
+python check_shapes.py $SLUG                          # deterministic shape-budget gate (exit 1 = shape gap)
+python validate_independence.py $SLUG                 # deterministic independence/echo gate (exit 1 = thin/echoed)
 ```
 Then seal the load-bearing PUBLIC bytes through the farm cite-or-fail gate (browser-agent-mcp-farm).
 

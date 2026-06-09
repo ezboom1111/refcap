@@ -14,7 +14,7 @@ from collections import Counter
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-from refledger import _read_jsonl, _host, triangulate, alpha_label, _MODALITY_CLASS
+from refledger import _read_jsonl, _host, triangulate, alpha_label, _MODALITY_CLASS, _resolve, _distinct_pred_count
 
 MIN_INDEPENDENT_HOSTS = 3
 MIN_MODALITIES = 2
@@ -50,6 +50,7 @@ def _detect_echo_clusters(signals):
 
 
 def validate_independence(rdir, hypothesis_id=None):
+    rdir = _resolve(rdir)   # accept a refledger slug (r_xxxx) or an absolute path, like the spine CLI
     ledger_path = os.path.join(rdir, "ledger.jsonl")
     if not os.path.exists(ledger_path):
         return {"pass": False, "error": f"No ledger.jsonl in {rdir}"}
@@ -76,8 +77,12 @@ def validate_independence(rdir, hypothesis_id=None):
 
         tri = triangulate(rdir, hid)
 
-        predictions = [r for r in rows if r.get("kind") == "prediction" and r.get("hypothesis_id") == hid]
-        distinct_preds = len(set(p.get("claim", "") for p in predictions))
+        # Predictions live in predictions.jsonl, NOT ledger.jsonl (the spine's digest reads them there too).
+        # Reading them from `rows` (ledger) found 0 and falsely flagged no-falsifiable-prediction. Use the spine's
+        # own _distinct_pred_count so the distinct/raw counts match what digest's alpha_label sees exactly.
+        pred_rows = [r for r in _read_jsonl(os.path.join(rdir, "predictions.jsonl")) if r.get("kind") == "prediction"]
+        predictions = [p for p in pred_rows if p.get("hypothesis_id", "") == hid]
+        distinct_preds = _distinct_pred_count(predictions)
         raw_preds = len(predictions)
 
         label = alpha_label(tri, stakes=stakes, distinct_predictions=distinct_preds, raw_predictions=raw_preds)
@@ -132,6 +137,8 @@ def main():
     result = validate_independence(args.run_dir, args.hypothesis)
     if args.json:
         print(json.dumps(result, ensure_ascii=False, indent=2))
+    elif result.get("error"):
+        print(f"[ERROR] {result['error']}")
     else:
         for h in result.get("hypotheses", []):
             status = "PASS" if h["pass"] else "FAIL"

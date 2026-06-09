@@ -13,14 +13,21 @@ import os, sys, json, argparse
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-from refledger import _read_jsonl, _host
+from refledger import _read_jsonl, _host, _resolve, _MODALITY_CLASS
 
 SHAPE_MAP = {
-    "page_html": "unstructured",
-    "structured_data": "structured",
-    "frame_screenshot": "video",
-    "ocr_text": "ocr",
-    "transcript_cue": "video",
+    # Keyed on the RAW `type` stored on artifacts (html/json/pdf/image/transcript/…), which is what
+    # ledger_append persists and _MODALITY_CLASS reads — NOT the EVIDENCE_KIND labels (page_html/…). Using the
+    # EVIDENCE_KIND vocabulary here silently misclassified json→unstructured (the measured bug this fixes).
+    "html": "unstructured", "md": "unstructured", "txt": "unstructured", "text": "unstructured",
+    "json": "structured", "csv": "structured",
+    "pdf": "semi-structured",
+    # The video SHAPE means you CONSUMED the temporal/spoken content (transcript/audio). A bare frame screenshot
+    # (type=image) does NOT prove that — it counts as semi-structured (a labeled-value capture). This deliberately
+    # catches the "YouTube URL + frame grab, ASR failed" checkbox-compliance failure the verification run found.
+    "transcript": "video", "audio": "video", "video": "video",
+    "image": "semi-structured",
+    "ocr": "ocr",
 }
 
 BUDGET = {
@@ -31,27 +38,25 @@ BUDGET = {
 
 
 def _classify_shape(artifact):
-    atype = artifact.get("type", "")
+    atype = (artifact.get("type", "") or "").lower()
     if atype in SHAPE_MAP:
         return SHAPE_MAP[atype]
+    # Fall back to the spine's canonical modality map, then to the file extension, then prose.
+    mod = _MODALITY_CLASS.get(atype, "")
+    mod_to_shape = {"web": "unstructured", "structured": "structured", "document": "semi-structured",
+                    "av": "video", "image": "semi-structured"}
+    if mod in mod_to_shape:
+        return mod_to_shape[mod]
     ext = os.path.splitext(artifact.get("source", ""))[1].lower()
-    if ext in (".pdf", ".xlsx", ".xls", ".csv"):
+    if ext in (".pdf", ".xlsx", ".xls"):
         return "semi-structured"
+    if ext in (".csv", ".json"):
+        return "structured"
     return "unstructured"
 
 
-def _is_genuine_structured(artifact, finding):
-    """Structured shape requires data from an official source with typed fields,
-    not news text repackaged into JSON."""
-    if artifact.get("type") != "structured_data":
-        return False
-    source = artifact.get("source", "")
-    if not source:
-        return False
-    return True
-
-
 def check_shapes(rdir, stakes_override=None):
+    rdir = _resolve(rdir)   # accept a refledger slug (r_xxxx) or an absolute path, like the spine CLI
     ledger_path = os.path.join(rdir, "ledger.jsonl")
     if not os.path.exists(ledger_path):
         return {"pass": False, "error": f"No ledger.jsonl in {rdir}"}
@@ -113,6 +118,8 @@ def main():
     result = check_shapes(args.run_dir, args.stakes)
     if args.json:
         print(json.dumps(result, ensure_ascii=False, indent=2))
+    elif result.get("error"):
+        print(f"[ERROR] {result['error']}")
     else:
         status = "PASS" if result["pass"] else "FAIL"
         print(f"[{status}] stakes={result['stakes']} findings={result['total_findings']} "
