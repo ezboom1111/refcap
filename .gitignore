@@ -34,3 +34,7 @@ _gradgem_report.md
 _alpha_report.md
 _alpha_demo_out.json
 _alpha_round2.md
+# QA scratch byproducts (farm bundles + investigator helper scripts + stray root runs)
+_alpha_*/
+_leesearch_findings*.py
+/r_*/
