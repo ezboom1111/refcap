@@ -101,6 +101,20 @@ class Harvest(unittest.TestCase):
         self.assertEqual(HC.harvest(since="2099-01-01")["total_runs"], 0)
         self.assertEqual(HC.harvest(since="2000-01-01")["total_runs"], 1)
 
+    def test_since_keeps_runs_with_unknown_created_date(self):   # regression: undated run dropped from every --since
+        # A hand-assembled run with no meta.json and no ts on any row -> created == "". It must NOT be silently
+        # excluded by --since (losing real data); unknown date = keep.
+        rdir = os.path.join(self.research, "r_undated00")
+        os.makedirs(rdir)
+        import json
+        with open(os.path.join(rdir, "ledger.jsonl"), "w", encoding="utf-8") as f:
+            f.write(json.dumps({"kind": "hypothesis", "hypothesis_id": "h1", "thesis": "t", "stakes": "med"}) + "\n")
+            f.write(json.dumps({"kind": "artifact", "artifact_id": "a1", "type": "html", "source": "https://a.com/1"}) + "\n")
+            f.write(json.dumps({"kind": "finding", "artifact_id": "a1", "polarity": "confirms", "hypothesis_id": "h1"}) + "\n")
+        with open(os.path.join(rdir, "SUMMARY.md"), "w", encoding="utf-8") as f:
+            f.write("- [ALPHA]\n")
+        self.assertEqual(HC.harvest(since="2000-01-01")["total_runs"], 1)   # kept despite --since
+
     def test_single_modality_gap_ignores_other_class(self):   # regression: 'other' (ocr/text) inflated mod count
         # one real modality (web) + one 'other' (ocr type, absent from _MODALITY_CLASS) -> still single-modality
         self._build_run("mods", [("https://a.com/1", "html", "confirms"),

@@ -149,9 +149,10 @@ def harvest(since=None):
     for rdir in deduped:
         analysis = _analyze_run(rdir)
         if analysis:
-            # --since: keep runs created ON/AFTER the cutoff (ISO dates compare lexically; created may be a full
-            # timestamp, so compare by the date prefix).
-            if since and (not analysis.get("created") or analysis["created"][:10] < since):
+            # --since: drop runs created BEFORE the cutoff (ISO dates compare lexically; created may be a full
+            # timestamp, so compare by the date prefix). A run with an UNKNOWN created date is KEPT, not dropped —
+            # silently excluding undated runs from every --since call (even permissive ones) would lose real data.
+            if since and analysis.get("created") and analysis["created"][:10] < since:
                 continue
             results.append(analysis)
 

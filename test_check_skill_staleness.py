@@ -103,6 +103,21 @@ class Staleness(unittest.TestCase):
         fm, _ = SS._parse_frontmatter(p)
         self.assertEqual(fm.get("last_verified"), self._today().isoformat())
 
+    def test_fix_ignores_body_last_verified_and_inserts_into_frontmatter(self):   # regression: body line mutated
+        d = os.path.join(self.skills, "bodybug")
+        os.makedirs(d)
+        p = os.path.join(d, "SKILL.md")
+        with open(p, "w", encoding="utf-8") as f:
+            f.write("---\nname: bodybug\n---\n\n# Notes\nlast_verified: was checked 2020-01-01\n")
+        SS.check_staleness(ttl_days=30, fix=True)
+        res = SS.check_staleness(ttl_days=30)
+        self.assertEqual(res["skills"][0]["status"], "fresh")   # frontmatter got the key, not the body
+        with open(p, encoding="utf-8") as f:
+            content = f.read()
+        self.assertIn("last_verified: was checked 2020-01-01", content)   # body line untouched
+        fm, _ = SS._parse_frontmatter(p)
+        self.assertEqual(fm.get("last_verified"), self._today().isoformat())
+
     def test_fix_preserves_folded_yaml_block(self):   # real SKILL.md uses description: >- folded blocks
         d = os.path.join(self.skills, "folded")
         os.makedirs(d)

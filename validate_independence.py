@@ -9,23 +9,43 @@ Usage:
     python validate_independence.py <run_dir> --hypothesis <hid>   # specific hypothesis
     python validate_independence.py <run_dir> --json
 """
-import os, sys, json, argparse
+import os, sys, re, json, argparse
 from collections import Counter
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 from refledger import (_read_jsonl, _host, triangulate, alpha_label, _MODALITY_CLASS, _resolve,
-                       _distinct_pred_count, _jaccard, _shingles, _NEAR_DUP_SIM)
+                       _distinct_pred_count, _jaccard, _shingles, _NEAR_DUP_SIM, _SHINGLE_K,
+                       _CJK_STOP, _EN_STOP)
 
 MIN_INDEPENDENT_HOSTS = 3
 MIN_MODALITIES = 2
 
 
+def _sig_tokens(text):
+    """Significant content tokens — REPLICATES _shingles' filter exactly (drop stopwords + <4-char ascii words) so
+    the unigram-fallback path below stays consistent with the spine's shingle tokenization."""
+    out = []
+    for w in re.findall(r"[^\W\d_]{2,}", (text or "").lower(), re.UNICODE):
+        if w in _CJK_STOP or w in _EN_STOP:
+            continue
+        if not w.isascii() or len(w) >= 4:
+            out.append(w)
+    return out
+
+
 def _text_similarity(a, b):
-    """SYMMETRIC near-identity score, reusing the spine's 3-gram Jaccard (the same measure triangulate uses to
-    collapse echoes). Order-independent and length-fair — unlike the old `intersection / len(text_i)` which keyed
-    the denominator on whichever signal came first (a long-vs-subset pair flipped result on insertion order, and a
-    single-word text forced denominator=1 → false echo)."""
+    """SYMMETRIC near-identity score. Order-independent and length-fair — unlike the old `intersection /
+    len(text_i)` which keyed the denominator on whichever signal came first.
+
+    Uses the spine's 3-gram shingle Jaccard for normal-length texts (precise; topically-similar-but-INDEPENDENT
+    findings don't falsely cluster). BUT _shingles emits 1-tuples for <K significant tokens and K-grams otherwise,
+    and a 1-tuple set can NEVER intersect a K-gram set — so a 2-token vs 3-token near-duplicate would score 0.0
+    and silently slip through. When EITHER side is below K tokens, fall back to a word-SET Jaccard (also symmetric),
+    which is the right granularity for such short texts."""
+    ta, tb = _sig_tokens(a), _sig_tokens(b)
+    if len(ta) < _SHINGLE_K or len(tb) < _SHINGLE_K:
+        return _jaccard(set(ta), set(tb))
     return _jaccard(_shingles(a), _shingles(b))
 
 

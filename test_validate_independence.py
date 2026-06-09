@@ -101,6 +101,18 @@ class IndependenceGate(unittest.TestCase):
                 {"text": "the quarterly revenue figures released alongside production output data analyst notes", "polarity": "confirms"}]
         self.assertEqual(VI._detect_echo_clusters(sigs), [])
 
+    def test_echo_caught_across_shingle_token_boundary(self):   # regression: 1-tuple vs 3-gram never intersect
+        # 2 significant tokens vs 3 — _shingles would emit 1-tuples vs a 3-gram (Jaccard always 0); the word-set
+        # fallback must still catch the near-duplicate.
+        sigs = [{"text": "tesla apple", "polarity": "confirms"},
+                {"text": "tesla apple microsoft", "polarity": "confirms"}]
+        self.assertEqual(VI._detect_echo_clusters(sigs), [[0, 1]])
+
+    def test_independent_topical_findings_not_falsely_clustered(self):   # word-set fallback shouldn't over-cluster
+        sigs = [{"text": "korean biosimilar exports reached record annual volume driven mostly celltrion shipments", "polarity": "confirms"},
+                {"text": "domestic semiconductor capacity expansion approved following government subsidy package decision", "polarity": "confirms"}]
+        self.assertEqual(VI._detect_echo_clusters(sigs), [])
+
     def test_missing_ledger_returns_error(self):
         res = VI.validate_independence(os.path.join(self.d, "no_such"))
         self.assertFalse(res["pass"])

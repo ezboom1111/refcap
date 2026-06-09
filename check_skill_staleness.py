@@ -11,7 +11,7 @@ Usage:
     python check_skill_staleness.py --fix              # update last_verified to today
 """
 import os, sys, json, argparse, re, glob
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SKILLS_DIR = os.path.join(HERE, "skills")
@@ -36,15 +36,23 @@ def _parse_frontmatter(path):
 def _update_last_verified(path, today_str):
     with open(path, "r", encoding="utf-8") as f:
         content = f.read()
-    # Anchor to a LINE (^...$, MULTILINE) and rewrite only the value to end-of-line — NOT `\s*\S+`, whose `\s*`
-    # crossed the newline and `\S+` swallowed the YAML closing `---` when the value was empty (unrecoverable
-    # corruption). count=1 so a literal `last_verified:` in the body/docs is never touched.
-    if re.search(r"(?m)^last_verified:.*$", content):
-        content = re.sub(r"(?m)^last_verified:.*$", f"last_verified: {today_str}", content, count=1)
+    # Operate ONLY inside the frontmatter block (first `---\n ... \n---`). A whole-file regex would (a) match a
+    # literal `last_verified:` line in the markdown BODY before the frontmatter and rewrite that instead (leaving
+    # the skill permanently 'missing'), and (b) its `\s*\S+` form once ate the closing `---`. Line-anchored within
+    # the block, the value is rewritten to end-of-line (never crossing the newline / delimiter).
+    m = re.match(r"(?s)^(---\s*\n)(.*?)(\n---)", content)
+    if not m:
+        # No frontmatter block — create one (defensive; real SKILL.md files always have frontmatter).
+        new = f"---\nlast_verified: {today_str}\n---\n\n" + content
     else:
-        content = content.replace("\n---\n", f"\nlast_verified: {today_str}\n---\n", 1)
+        head, fm_body, tail = m.group(1), m.group(2), m.group(3)
+        if re.search(r"(?m)^last_verified:.*$", fm_body):
+            fm_body = re.sub(r"(?m)^last_verified:.*$", f"last_verified: {today_str}", fm_body, count=1)
+        else:
+            fm_body = fm_body + f"\nlast_verified: {today_str}"
+        new = head + fm_body + tail + content[m.end():]
     with open(path, "w", encoding="utf-8") as f:
-        f.write(content)
+        f.write(new)
 
 
 def check_staleness(ttl_days=DEFAULT_TTL_DAYS, fix=False):
