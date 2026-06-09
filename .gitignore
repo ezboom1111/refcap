@@ -34,7 +34,17 @@ _gradgem_report.md
 _alpha_report.md
 _alpha_demo_out.json
 _alpha_round2.md
-# QA scratch byproducts (farm bundles + investigator helper scripts + stray root runs)
+# QA scratch byproducts (farm bundles + investigator helper scripts + stray root runs/dumps)
 _alpha_*/
 _leesearch_findings*.py
 /r_*/
+/art/
+/runs/
+# QA investigators sometimes write extraction scratch to cwd instead of their run dir (folder-contract slip):
+_ge_*
+_q_*
+_sanil_*
+_numbeo_*
+_tax_*
+_viol_*
+_visa_*
