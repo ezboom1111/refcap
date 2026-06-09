@@ -68,3 +68,25 @@ These gates apply at `digest` time. A finding that fails a gate is not counted t
 - **independence**: findings from the same eTLD+1 host count as 1 for triangulation (but still count individually for shape budgets).
 - **polarity balance**: at least 1 `disconfirms` or `neutral` finding per hypothesis (pure confirmation = echo chamber).
 - **artifact presence**: the shape is earned by the artifact, not the claim. "I found a CSV" without the CSV registered = unstructured, not structured.
+
+## Gate limitations — what the deterministic gates CANNOT prove (QA-validated, 2026-06-09)
+
+A 20-scenario full-stack QA + independent audit confirmed the two-layer design: the deterministic gates
+(`check_shapes.py` / `validate_independence.py`) prove STRUCTURE; an independent ADVERSARIAL AUDIT proves
+GENUINENESS. The gates alone are necessary but NOT sufficient. Measured gaps the gates cannot catch:
+
+- **Structured PROVENANCE (only ~36% of `structured` findings were genuine in QA).** `check_shapes` classifies a
+  finding as `structured` by artifact `type` (json/csv) — it CANNOT tell a real API/DB/filing extraction from news
+  numbers hand-packed into JSON ("structured-in-disguise"). The gate passes both. YOU (and the audit) must verify a
+  structured finding came from an official DB host (DART/KIPRIS/NTIS/exchange/customs), NOT the same host as a news
+  article you already cited. Repackaging the same numbers into json is unstructured wearing a costume.
+- **Video genuineness (gate is STRICTER than human judgment).** The `video` shape requires the AV modality
+  (`transcript`/`audio`/`video` type) — i.e. you CONSUMED the spoken/temporal content. A bare frame screenshot
+  (`type=image`) counts as `semi-structured`, NOT `video`. Auditors counted frame-sampling as "genuine video" ~71%
+  of the time; the gate counted it ~6%. Both are defensible — just know the gate's bar: a YouTube URL or a thumbnail
+  is never `video`; only a real transcript/caption (or registered frames) is.
+- **Truth.** `cite-or-fail` proves a quote EXISTS in the bytes, not that the bytes are correct. The gates never
+  judge whether the pick is *actually* alpha — that is the agent's + the adversarial audit's call.
+
+Takeaway: run the gates to filter structure, THEN run an independent (ideally cross-model) audit for genuineness.
+A gate PASS is a floor, not a verdict.

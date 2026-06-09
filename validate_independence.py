@@ -83,26 +83,41 @@ def validate_independence(rdir, hypothesis_id=None):
         return {"pass": False, "error": f"No ledger.jsonl in {rdir}"}
 
     rows = _read_jsonl(ledger_path)
-    hypotheses = [r for r in rows if r.get("kind") == "hypothesis"]
+    # Last row WINS per hypothesis_id (the agent may re-declare a thesis, appending a 2nd row) — mirror digest()'s
+    # hyps_latest. Iterating raw rows evaluated the SAME hypothesis twice (measured in QA: duplicate rows).
+    hyps_latest = {}
+    order = []
+    for r in rows:
+        if r.get("kind") == "hypothesis":
+            hid = r["hypothesis_id"]
+            if hid not in hyps_latest:
+                order.append(hid)
+            hyps_latest[hid] = r
 
-    if not hypotheses:
+    if not hyps_latest:
         return {"pass": False, "error": "No hypotheses in ledger"}
 
     if hypothesis_id:
-        hyps = [h for h in hypotheses if h.get("hypothesis_id") == hypothesis_id]
-        if not hyps:
+        if hypothesis_id not in hyps_latest:
             return {"pass": False, "error": f"Hypothesis {hypothesis_id} not found"}
-    else:
-        hyps = hypotheses
+        order = [hypothesis_id]
 
     results = []
+    skipped = []
+    evaluated = 0
     all_pass = True
 
-    for hyp in hyps:
-        hid = hyp["hypothesis_id"]
+    for hid in order:
+        hyp = hyps_latest[hid]
         stakes = hyp.get("stakes", "") or "low"
 
         tri = triangulate(rdir, hid)
+
+        # A hypothesis with ZERO findings is an UNUSED/draft declaration, not a failing alpha — skip it from the
+        # pass decision (measured in QA: a leftover dead-stub hypothesis dragged an otherwise-ALPHA run to RECON).
+        if tri.get("n_signals", 0) == 0:
+            skipped.append({"hypothesis_id": hid, "thesis": hyp.get("thesis", "")[:80], "reason": "no-findings"})
+            continue
 
         # Predictions live in predictions.jsonl, NOT ledger.jsonl (the spine's digest reads them there too).
         # Reading them from `rows` (ledger) found 0 and falsely flagged no-falsifiable-prediction. Use the spine's
@@ -129,6 +144,7 @@ def validate_independence(rdir, hypothesis_id=None):
 
         has_disconfirm = tri.get("disconfirming", 0) > 0
 
+        evaluated += 1
         passed = label.get("alpha", False) and not echo_clusters and not concentration_warning
         if not passed:
             all_pass = False
@@ -151,7 +167,10 @@ def validate_independence(rdir, hypothesis_id=None):
             "warning": label.get("warning", ""),
         })
 
-    return {"pass": all_pass, "hypotheses": results}
+    # The run PASSES only if at least one hypothesis was actually evaluated (had findings) AND all evaluated passed.
+    # A run with only dead-stub hypotheses (no findings anywhere) is RECON, not a vacuous PASS.
+    run_pass = all_pass and evaluated > 0
+    return {"pass": run_pass, "hypotheses": results, "skipped_no_findings": skipped, "evaluated": evaluated}
 
 
 def main():

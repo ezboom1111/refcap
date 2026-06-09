@@ -118,6 +118,27 @@ class IndependenceGate(unittest.TestCase):
         self.assertFalse(res["pass"])
         self.assertIn("error", res)
 
+    def test_dead_stub_hypothesis_does_not_drag_run_to_recon(self):   # regression (QA): leftover empty hypothesis
+        self._alpha_grade_fixture()                       # the real ALPHA thesis (+ findings + prediction)
+        R.set_hypothesis(self.r, "an abandoned draft thesis with zero findings", stakes="med")  # dead stub
+        res = VI.validate_independence(self.r)
+        self.assertTrue(res["pass"])                      # the active ALPHA must not be dragged down by the stub
+        self.assertEqual(len(res["skipped_no_findings"]), 1)
+        self.assertEqual(res["evaluated"], 1)
+
+    def test_duplicate_hypothesis_rows_evaluated_once(self):   # regression (QA): same hid appended twice
+        hid = self._alpha_grade_fixture()
+        R.set_hypothesis(self.r, "hidden powerhouse thesis")   # SAME thesis -> SAME hid -> a 2nd ledger row
+        res = VI.validate_independence(self.r)
+        ids = [h["hypothesis_id"] for h in res["hypotheses"]]
+        self.assertEqual(ids.count(hid), 1)                # evaluated once, not twice
+
+    def test_run_with_only_empty_hypotheses_is_recon(self):
+        R.set_hypothesis(self.r, "thesis with no evidence at all", stakes="med")
+        res = VI.validate_independence(self.r)
+        self.assertFalse(res["pass"])
+        self.assertEqual(res["evaluated"], 0)
+
 
 if __name__ == "__main__":
     unittest.main()
