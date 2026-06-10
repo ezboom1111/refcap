@@ -30,6 +30,7 @@ few claims: register exact bytes → `farm_add_claim` (anchor = verbatim quote) 
 | Source / need | Executor |
 |---|---|
 | YouTube **with** served captions, cheap trend numbers / spoken gist | `youtube-research` (caption-first, free APIs, no download, no ASR) |
+| YouTube trend **time-series** (velocity curve, decay half-life) | `refcap/trendwatch.py` — model-free daily collector (Task Scheduler `refcap-trendwatch`, 09:00) appends keyed Data API snapshots to an append-only ledger; `report` gives views/hour + half-life. Add targets: `python trendwatch.py add video <url>`. Agent reads the report and judges; seal load-bearing numbers via farm as usual |
 | Video **without** captions / foreign VO / TikTok·IG·non-YouTube / deep resumable dig | `leesearch-video-heavy` (refcap: whisper ASR, OCR, frames, resumable ledger) |
 | Competitor / pricing / market-size numbers | farm directly with the `market_scan` claim types (see farm SKILL.md "Lens claim types") — corroborate across independent eTLD+1 domains |
 | User-pain / feature-gap / voice-of-customer | farm directly with the `product_planning` claim types (same section) |
