@@ -154,6 +154,94 @@ def snapshot(base, key, fetch=fetch_json, at=None):
     return rows
 
 
+# ---- chart ledger (top-50 mostPopular; the CHART is the watchlist, so nothing here ages) ----
+
+def _chart_path(base, region):
+    return os.path.join(base, f"chart-{region}.jsonl")
+
+
+def read_chart(base, region):
+    rows = []
+    try:
+        with open(_chart_path(base, region), encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line:
+                    try:
+                        rows.append(json.loads(line))
+                    except json.JSONDecodeError:
+                        continue
+    except FileNotFoundError:
+        pass
+    return rows
+
+
+def chart_snapshot(base, key, region="KR", fetch=fetch_json, at=None):
+    """Append today's top-50 mostPopular chart (rank, id, title, channel, categoryId, raw stats).
+    1 quota unit per call; no fixed list to curate — the platform refreshes the population daily."""
+    if not key:
+        raise SystemExit("YOUTUBE_API_KEY is not set")
+    at = at or now_iso()
+    url = (f"{API}/videos?part=snippet,statistics&chart=mostPopular"
+           f"&regionCode={region}&maxResults=50&key={key}")
+    try:
+        payload = fetch(url)
+    except Exception as err:
+        raise SystemExit(f"API fetch failed: {_scrub_key(str(err), key)}") from None
+    rows = []
+    for rank, item in enumerate(payload.get("items", []), 1):
+        snippet = item.get("snippet", {})
+        rows.append({"at": at, "region": region, "rank": rank, "id": item["id"],
+                     "title": snippet.get("title", ""), "channelTitle": snippet.get("channelTitle", ""),
+                     "categoryId": snippet.get("categoryId", ""),
+                     "stats": item.get("statistics", {})})
+    os.makedirs(base, exist_ok=True)
+    with open(_chart_path(base, region), "a", encoding="utf-8") as f:
+        for row in rows:
+            f.write(json.dumps(row, ensure_ascii=False) + "\n")
+    return rows
+
+
+def chart_stats(base, region):
+    """Set arithmetic over the chart series: per-day entries/exits/churn + per-video chart
+    residence (daysOnChart, bestRank, first/last seen). Same-day reruns: the LAST snapshot of a
+    calendar day wins (idempotent). What a rising format MEANS stays the agent's judgment."""
+    rows = read_chart(base, region)
+    by_snapshot = {}
+    for row in rows:
+        by_snapshot.setdefault(row["at"], {})[row["id"]] = row
+    latest_per_day = {}
+    for at_value in sorted(by_snapshot):
+        latest_per_day[at_value[:10]] = by_snapshot[at_value]   # later 'at' overwrites = last wins
+    days = sorted(latest_per_day)
+    per_video = {}
+    daily = []
+    prev_ids = None
+    for day in days:
+        snapshot = latest_per_day[day]
+        current_ids = set(snapshot)
+        for vid, row in snapshot.items():
+            entry = per_video.setdefault(vid, {
+                "id": vid, "title": row["title"], "channelTitle": row["channelTitle"],
+                "categoryId": row["categoryId"], "firstSeen": day, "lastSeen": day,
+                "daysOnChart": 0, "bestRank": row["rank"], "latestRank": row["rank"]})
+            entry["daysOnChart"] += 1
+            entry["lastSeen"] = day
+            entry["latestRank"] = row["rank"]
+            entry["bestRank"] = min(entry["bestRank"], row["rank"])
+            entry["title"] = row["title"]   # titles get edited mid-trend; keep the latest
+        if prev_ids is None:
+            daily.append({"day": day, "entries": sorted(current_ids), "exits": [], "size": len(current_ids)})
+        else:
+            daily.append({"day": day,
+                          "entries": sorted(current_ids - prev_ids),
+                          "exits": sorted(prev_ids - current_ids),
+                          "size": len(current_ids)})
+        prev_ids = current_ids
+    return {"region": region, "days": len(days), "daily": daily,
+            "videos": sorted(per_video.values(), key=lambda v: (-v["daysOnChart"], v["bestRank"]))}
+
+
 # ---- velocity + half-life (arithmetic only; the agent judges the numbers) ----
 
 def _parse_at(value):
@@ -250,6 +338,11 @@ def _print_report(rep):
 
 
 def main():
+    # Korean chart titles vs a cp949 console: force utf-8 (replace) so printing never crashes the task.
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except AttributeError:
+        pass
     parser = argparse.ArgumentParser(description="YouTube trend snapshot collector + velocity report")
     parser.add_argument("--base", default=DEFAULT_BASE, help="data dir (default: refcap/research/trendwatch)")
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -263,6 +356,11 @@ def main():
     sub.add_parser("snapshot")
     p_rep = sub.add_parser("report")
     p_rep.add_argument("--json", action="store_true")
+    p_chart = sub.add_parser("chart", help="append today's top-50 mostPopular chart for a region")
+    p_chart.add_argument("region", nargs="?", default="KR")
+    p_cstats = sub.add_parser("chartstats", help="entries/exits/churn + chart-residence stats")
+    p_cstats.add_argument("region", nargs="?", default="KR")
+    p_cstats.add_argument("--json", action="store_true")
     args = parser.parse_args()
 
     if args.cmd == "add":
@@ -284,6 +382,20 @@ def main():
             print(json.dumps(rep, ensure_ascii=False, indent=1))
         else:
             _print_report(rep)
+    elif args.cmd == "chart":
+        rows = chart_snapshot(args.base, key=os.environ.get("YOUTUBE_API_KEY", ""), region=args.region)
+        print(f"chart ok: {len(rows)} rows ({args.region}) at {rows[0]['at'] if rows else '-'}")
+    elif args.cmd == "chartstats":
+        stats = chart_stats(args.base, args.region)
+        if args.json:
+            print(json.dumps(stats, ensure_ascii=False, indent=1))
+        else:
+            print(f"# chart {stats['region']}: {stats['days']} day(s)")
+            for day in stats["daily"][-7:]:
+                print(f"{day['day']}  in={len(day['entries']):2}  out={len(day['exits']):2}  size={day['size']}")
+            print("# longest chart residence (top 15)")
+            for video in stats["videos"][:15]:
+                print(f"{video['daysOnChart']:3}d  best#{video['bestRank']:2}  {video['channelTitle'][:18]:18} {video['title'][:48]}")
 
 
 if __name__ == "__main__":

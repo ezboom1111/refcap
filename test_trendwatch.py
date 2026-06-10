@@ -160,5 +160,75 @@ class Report(unittest.TestCase):
         self.assertIn(item["halfLife"]["status"], ("ok", "insufficient_data", "not_decaying"))
 
 
+def fake_chart_fetch_factory(days):
+    """Fixture: days = {at_prefix: [(id, title, channel, categoryId, views)]} keyed by request count order."""
+    calls = {"n": 0}
+    sequence = list(days)
+
+    def fake_fetch(url):
+        assert "chart=mostPopular" in url and "key=" in url
+        day = sequence[min(calls["n"], len(sequence) - 1)]
+        calls["n"] += 1
+        return {"items": [{"id": vid, "snippet": {"title": t, "channelTitle": c, "categoryId": cat},
+                           "statistics": {"viewCount": str(v)}}
+                          for vid, t, c, cat, v in days[day]]}
+    return fake_fetch
+
+
+class ChartLedger(unittest.TestCase):
+    def setUp(self):
+        self.d = tempfile.mkdtemp()
+
+    def tearDown(self):
+        shutil.rmtree(self.d, ignore_errors=True)
+
+    def test_chart_snapshot_appends_ranked_rows_with_titles(self):
+        fetch = fake_chart_fetch_factory({"d1": [("vidA", "A제목", "chanX", "10", 100), ("vidB", "B", "chanY", "24", 90)]})
+        rows = TW.chart_snapshot(self.d, key="K", region="KR", fetch=fetch, at="2026-06-10T00:00:00Z")
+        self.assertEqual([(r["rank"], r["id"]) for r in rows], [(1, "vidA"), (2, "vidB")])
+        self.assertEqual(rows[0]["title"], "A제목")  # report must not be id-only (Monday-morning readability)
+        ledger = TW.read_chart(self.d, "KR")
+        self.assertEqual(len(ledger), 2)
+        self.assertEqual(ledger[0]["stats"]["viewCount"], "100")  # raw strings preserved (farm-registerable)
+
+    def test_no_key_in_chart_ledger(self):
+        fetch = fake_chart_fetch_factory({"d1": [("vidA", "A", "c", "10", 1)]})
+        TW.chart_snapshot(self.d, key="SECRETKEY", region="KR", fetch=fetch, at="2026-06-10T00:00:00Z")
+        raw = open(os.path.join(self.d, "chart-KR.jsonl"), encoding="utf-8").read()
+        self.assertNotIn("SECRETKEY", raw)
+
+    def test_chart_stats_entries_exits_residence(self):
+        days = {
+            "2026-06-10": [("vidA", "A", "c1", "10", 100), ("vidB", "B", "c2", "24", 90)],
+            "2026-06-11": [("vidA", "A", "c1", "10", 200), ("vidC", "C", "c3", "10", 150)],
+            "2026-06-12": [("vidC", "C", "c3", "10", 300)],
+        }
+        fetch = fake_chart_fetch_factory(days)
+        for at_day in days:
+            TW.chart_snapshot(self.d, key="K", region="KR", fetch=fetch, at=f"{at_day}T00:00:00Z")
+        stats = TW.chart_stats(self.d, "KR")
+        self.assertEqual(stats["days"], 3)
+        by_day = {d["day"]: d for d in stats["daily"]}
+        self.assertEqual(by_day["2026-06-11"]["entries"], ["vidC"])
+        self.assertEqual(by_day["2026-06-11"]["exits"], ["vidB"])
+        self.assertEqual(by_day["2026-06-12"]["exits"], ["vidA"])
+        by_id = {v["id"]: v for v in stats["videos"]}
+        self.assertEqual(by_id["vidA"]["daysOnChart"], 2)
+        self.assertEqual(by_id["vidB"]["daysOnChart"], 1)
+        self.assertEqual(by_id["vidC"]["daysOnChart"], 2)
+        self.assertEqual(by_id["vidA"]["bestRank"], 1)
+
+    def test_same_day_rerun_is_idempotent_in_stats(self):
+        fetch = fake_chart_fetch_factory({
+            "r1": [("vidA", "A", "c", "10", 100)],
+            "r2": [("vidB", "B", "c", "10", 50)],  # later same-day run replaces the earlier one
+        })
+        TW.chart_snapshot(self.d, key="K", region="KR", fetch=fetch, at="2026-06-10T00:00:00Z")
+        TW.chart_snapshot(self.d, key="K", region="KR", fetch=fetch, at="2026-06-10T09:00:00Z")
+        stats = TW.chart_stats(self.d, "KR")
+        self.assertEqual(stats["days"], 1)
+        self.assertEqual([v["id"] for v in stats["videos"]], ["vidB"])
+
+
 if __name__ == "__main__":
     unittest.main()
