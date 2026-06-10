@@ -30,8 +30,7 @@ few claims: register exact bytes → `farm_add_claim` (anchor = verbatim quote) 
 | Source / need | Executor |
 |---|---|
 | YouTube **with** served captions, cheap trend numbers / spoken gist | `youtube-research` (caption-first, free APIs, no download, no ASR) |
-| YouTube trend **time-series** (velocity curve, decay half-life) | `refcap/trendwatch.py` — model-free daily collector (Task Scheduler `refcap-trendwatch`, 09:00). **Tracking** (fixed targets — only valid for: alpha-prediction scoring, own/competitor benchmark, riding-trend lifespan): `add video <url>` → `report`. **Discovery** (no fixed list — the chart IS the population): `chart KR` daily top-50 ledger → `chartstats KR` gives entries/exits/churn + chart-residence; weekly content briefing = agent reads chartstats, proposes 기획 후보 3개, optionally registers each pick as a refledger `predict` for later Brier scoring |
-| 사업계획서/IR 수치 증빙 (심사위원 검증가능) | `sealed-research` workflow with `preset: "business-plan"` — numeric claims forced to ≥2 independent-domain corroboration (한국 에코 함정: 같은 협회 보고서 받아쓴 기사 2건 = 1소스 — 원문을 잡아라), output = paste-ready 각주 + 캡처 부록 + 재검증 단락. UNSEALED 수치는 "추정"으로 강등 — 그게 기능 |
+| Quantitative **time-series** need (velocity / decay of anything trackable) | `refcap/trendwatch.py` (standalone collector utility, NOT part of this skill's ceremony — see its docstring) |
 | Video **without** captions / foreign VO / TikTok·IG·non-YouTube / deep resumable dig | `leesearch-video-heavy` (refcap: whisper ASR, OCR, frames, resumable ledger) |
 | Competitor / pricing / market-size numbers | farm directly with the `market_scan` claim types (see farm SKILL.md "Lens claim types") — corroborate across independent eTLD+1 domains |
 | User-pain / feature-gap / voice-of-customer | farm directly with the `product_planning` claim types (same section) |
@@ -40,6 +39,22 @@ few claims: register exact bytes → `farm_add_claim` (anchor = verbatim quote) 
 | Hidden / underrated / mispriced ("숨은 꿀 / 저평가 / 선제적 알파") | **Alpha Fusion**: `leesearch-alpha` owns the thesis loop (hypothesis → findings → triangulate → predict → digest); YOU fan out sources across data shapes. Never stamp ALPHA from a single-leaf web-only run |
 
 **Invariant: one executor per source** (never light + heavy on the same clip), not one executor per investigation.
+
+## Effort ladder (token/thinking efficiency = accuracy devices PROPORTIONAL to stakes, never ceremony)
+
+Pick the tier by what the answer feeds — and name the tier you picked in one line:
+- **T0 quick** (throwaway question): answer natively, cite links inline. No farm, no run dir, no ledger.
+- **T1 standard** (default when this skill is invoked): gather natively; for every LOAD-BEARING claim,
+  cross-check across **≥2 independent sources** (same press release echoed = 1 source) and run one
+  cheap refutation pass ("what would make this wrong?"). Cite links. Still no farm unless T2 triggers.
+- **T2 sealed** (output feeds a decision / document / dispute / share): T1 + register exact bytes and
+  gate the load-bearing few (`farm_add_claim` → `farm_run_claim_gate {strictProvenance:true}` →
+  `farm_export_bundle`), or run the `sealed-research` workflow for the whole pass.
+
+Accuracy mechanisms are tier-independent METHOD, not domain features: independent-source collapsing,
+refutation before reporting, byte-grounded quotes (never paraphrase a number you'll cite), honest gaps
+("찾지 못함" beats a guess). Escalate a tier mid-run the moment a number becomes load-bearing; never
+run T2 ceremony on a T0 question.
 
 ## Alpha Fusion notes (the rest lives in `leesearch-alpha`)
 
