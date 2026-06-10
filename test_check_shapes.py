@@ -158,5 +158,61 @@ class Budget(unittest.TestCase):
         self.assertTrue(CS.check_shapes(self.r)["pass"])
 
 
+class ExitPolicy(unittest.TestCase):
+    """The quota is an ADVISORY signal by default (measured Goodhart: news repackaged as JSON to fill
+    the structured slot — only ~36% genuine). exit-1 hard gating is opt-in via --strict, for when an
+    external contract (CI, another agent's runbook) genuinely demands a hard floor."""
+
+    def setUp(self):
+        self.d = tempfile.mkdtemp(); self.r = R.open_research("xp", base=self.d)
+
+    def tearDown(self):
+        shutil.rmtree(self.d, ignore_errors=True)
+
+    def _gap_run(self):
+        hid = R.set_hypothesis(self.r, "thesis", stakes="low")["hypothesis_id"]
+        p = os.path.join(self.r, "one.txt")
+        with open(p, "w", encoding="utf-8") as f:
+            f.write("ev")
+        a = R.ledger_append(self.r, type="html", source="https://h.com/", method="m", path=p,
+                            canonical_path=p, sha256=R.sha256_file(p), quality_label="OK")
+        R.record_finding(self.r, "sig", "OBSERVED", a["artifact_id"], quote="ev",
+                         hypothesis_id=hid, polarity="confirms")   # 1 finding -> way under floor
+
+    def _exit_code(self, argv):
+        old = sys.argv
+        sys.argv = ["check_shapes.py"] + argv
+        try:
+            with self.assertRaises(SystemExit) as cm:
+                CS.main()
+            return cm.exception.code
+        finally:
+            sys.argv = old
+
+    def test_default_is_advisory_exit_zero_on_quota_gap(self):
+        self._gap_run()
+        self.assertEqual(self._exit_code([self.r]), 0)
+
+    def test_strict_exits_one_on_quota_gap(self):
+        self._gap_run()
+        self.assertEqual(self._exit_code([self.r, "--strict"]), 1)
+
+    def test_strict_exits_zero_on_pass(self):
+        hid = R.set_hypothesis(self.r, "thesis", stakes="low")["hypothesis_id"]
+        for i in range(13):
+            p = os.path.join(self.r, f"f{i}.txt")
+            with open(p, "w", encoding="utf-8") as f:
+                f.write("ev " + str(i))
+            a = R.ledger_append(self.r, type="html", source=f"https://h{i}.com/", method="m", path=p,
+                                canonical_path=p, sha256=R.sha256_file(p), quality_label="OK")
+            R.record_finding(self.r, f"sig {i}", "OBSERVED", a["artifact_id"], quote="ev",
+                             hypothesis_id=hid, polarity="confirms")
+        self.assertEqual(self._exit_code([self.r, "--strict"]), 0)
+
+    def test_missing_ledger_is_an_error_even_in_advisory_mode(self):
+        # A wrong path is an operator error, not a quota gap — advisory mode must not mask it.
+        self.assertEqual(self._exit_code([os.path.join(self.d, "no_such")]), 1)
+
+
 if __name__ == "__main__":
     unittest.main()

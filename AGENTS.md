@@ -9,8 +9,9 @@ research path under the `leesearch` front-door.
   verify → plan(farm) → digest. The brain is YOU; `refledger.py` is the disk-bound spine that only
   persists nouns (artifact / finding / frontier-entry) and judges whether evidence is real.
 - **Skills** are authored canonically here: `SKILL.md` (root = `leesearch-video-heavy`) and `skills/`
-  (`leesearch`, `leesearch-video-light`). Deployed copies live in `~/.claude/skills/` (Claude Code) and
-  `~/.codex/skills/` (Codex) — same `SKILL.md` format.
+  (`leesearch`, `leesearch-alpha`, `leesearch-video-heavy`). Deployed copies live in `~/.claude/skills/`
+  (Claude Code) and `~/.codex/skills/` (Codex) — same `SKILL.md` format. (`leesearch-video-light` was
+  retired 2026-06-10 — it was a pure indirection layer; the light path is `youtube-research` directly.)
 - **Always use ascii slugs** for `refledger.py` — never pass a Korean absolute path as an arg (Windows
   mangles it): `SLUG=$(python refledger.py open "<goal>")` then use `$SLUG`.
 - **Tests**: `python -m unittest test_refledger test_scenarios` (42, stdlib only).

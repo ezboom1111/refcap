@@ -38,7 +38,7 @@ Loop steps 2-3, when planning sources and collecting findings. This file tells y
 2. **Capture**: `farm_evidence_run` with the video URL → registers the page.
 3. **Frame sampling**: `farm_sample_frames` → captures key frames as visual evidence.
 4. **ASR (spoken content)**:
-   - If captions available → `leesearch-video-light` (fast, free)
+   - If captions available → `youtube-research` (fast, free)
    - If no captions / foreign language / need accuracy → `leesearch-video-heavy` (refcap whisper, local)
 5. **Register**: Both frames and transcript as findings with shape = video.
 

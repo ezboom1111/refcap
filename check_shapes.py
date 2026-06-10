@@ -2,10 +2,18 @@
 """check_shapes.py — deterministic shape-budget validator for leesearch-alpha investigations.
 
 Reads a ledger.jsonl run directory and checks whether the evidence shapes meet the declared
-stakes level's budget (as defined in evidence-budget.md). Exits 0 = pass, 1 = fail.
+stakes level's budget (as defined in evidence-budget.md).
+
+The quota is an ADVISORY signal by default: the report is printed, gaps are labeled, but the
+exit code is 0. Rationale (measured, 2026-06): a hard exit-1 floor Goodharts — agents repackaged
+news text as JSON to fill the `structured` slot (~36% genuine), so the gate bought confidence,
+not evidence. Genuineness comes from provenance + an independent adversarial audit, not counts.
+`--strict` restores exit-1 gating for callers with an external contract (CI, cross-agent runbooks).
+A missing/unreadable ledger is an operator error and exits 1 in BOTH modes.
 
 Usage:
-    python check_shapes.py <run_dir>                  # auto-detect stakes from hypothesis
+    python check_shapes.py <run_dir>                  # advisory: report + exit 0 (auto-detect stakes)
+    python check_shapes.py <run_dir> --strict         # hard gate: exit 1 on any unmet floor
     python check_shapes.py <run_dir> --stakes high    # override stakes level
     python check_shapes.py <run_dir> --json            # machine-readable output
 """
@@ -138,23 +146,31 @@ def main():
     parser = argparse.ArgumentParser(description="Check evidence shape budget")
     parser.add_argument("run_dir", help="Path to refledger run directory")
     parser.add_argument("--stakes", choices=["low", "med", "high"], help="Override stakes level")
+    parser.add_argument("--strict", action="store_true",
+                        help="Exit 1 on unmet floors (default: advisory — report only, exit 0)")
     parser.add_argument("--json", action="store_true", help="JSON output")
     args = parser.parse_args()
 
     result = check_shapes(args.run_dir, args.stakes)
+    result["mode"] = "strict" if args.strict else "advisory"
     if args.json:
         print(json.dumps(result, ensure_ascii=False, indent=2))
     elif result.get("error"):
         print(f"[ERROR] {result['error']}")
     else:
-        status = "PASS" if result["pass"] else "FAIL"
+        status = "PASS" if result["pass"] else ("FAIL" if args.strict else "ADVISORY-GAP")
         print(f"[{status}] stakes={result['stakes']}({result['stakes_source']}) "
               f"findings={result['total_findings']} floor={result['budget_min']} "
               f"(max~{result['budget_max_advisory']})")
         print(f"  shapes: {result['shape_counts']}")
         if result.get("issues"):
             print(f"  issues: {', '.join(result['issues'])}")
-    sys.exit(0 if result["pass"] else 1)
+        if not result["pass"] and not args.strict:
+            print("  (advisory mode: gaps reported, not gated -- genuineness comes from provenance + "
+                  "adversarial audit, not counts; use --strict to hard-gate)")
+    if result.get("error"):
+        sys.exit(1)   # wrong path / unreadable ledger = operator error in both modes
+    sys.exit(0 if (result["pass"] or not args.strict) else 1)
 
 
 if __name__ == "__main__":

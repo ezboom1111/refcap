@@ -40,10 +40,14 @@ table extracted to `.csv` = structured. Earn the shape by producing the artifact
 - The upper end of the candidate range is ADVISORY — over-collecting is not a failure (quality, not volume, is
   the agent's judgment). Only the floor (`budget_min`) and per-shape minimums gate the PASS.
 
-**This table is mechanically enforced.** Run `python check_shapes.py <run_dir>` — it reads the ledger, gates at
-the HIGHEST declared `--stakes` among the run's hypotheses (or a `--stakes` override; `stakes-undeclared` if
-neither), skips dangling findings, and exits 1 with `missing-<shape>(N<min)` for any unmet floor. Don't eyeball
-the budget; run the gate.
+**This table is mechanically REPORTED, not hard-gated.** Run `python check_shapes.py <run_dir>` — it reads the
+ledger, evaluates at the HIGHEST declared `--stakes` among the run's hypotheses (or a `--stakes` override;
+`stakes-undeclared` if neither), skips dangling findings, and labels `missing-<shape>(N<min)` for any unmet
+floor. By default this is **ADVISORY (exit 0)**: the gaps are signals to weigh, not quotas to fill. Measured
+rationale (2026-06 QA): a hard exit-1 floor Goodharts — agents repackaged news text as JSON to satisfy the
+`structured` slot (~36% genuine), buying confidence without evidence. Genuineness comes from provenance + the
+adversarial audit, never from counts. `--strict` restores exit-1 for an external contract (CI, cross-agent
+runbooks). Don't eyeball the budget; run the report — then JUDGE the gaps.
 
 ## Video/audio/OCR decision protocol (not optional-by-default)
 
@@ -52,7 +56,7 @@ Video is not "nice to have" — for most topics, relevant video exists. The prot
 1. **SEARCH first** — YouTube/platform search for the topic. Takes 30 seconds.
 2. **If relevant results exist** (they almost always do for med/high stakes):
    - Capture via `farm_evidence_run` + `farm_sample_frames` for visual evidence
-   - For spoken content: use `leesearch-video-heavy` (refcap whisper ASR) or `leesearch-video-light` (captions)
+   - For spoken content: use `leesearch-video-heavy` (refcap whisper ASR) or `youtube-research` (captions)
    - Register frames and transcript as findings with the video shape
 3. **If genuinely no results** after searching: mark "searched, not material" in the shape plan with the search query used.
 4. **"I didn't look" ≠ "not material."** Skipping the search is a shape violation.

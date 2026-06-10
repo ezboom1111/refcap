@@ -9,7 +9,8 @@ metadata:
 
 # RECON remediation
 
-Read this file when `digest` stamps `[RECON]`, OR when `check_shapes.py` / `validate_independence.py` exit 1.
+Read this file when `digest` stamps `[RECON]`, when `validate_independence.py` exits 1, OR when
+`check_shapes.py` reports advisory `missing-*` gaps you judge material (it no longer hard-gates by default).
 The **Reason** column below is the EXACT substring the validators emit in their `issues` list — match on that
 substring (counts in parens vary, e.g. `thin-independence(1<3)`), then apply the prescription.
 

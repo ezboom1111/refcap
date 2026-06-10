@@ -27,12 +27,12 @@ contract; the runbook is the procedure.
 - **ISN'T**: a brain, a memory system, a skill-learning loop, or an orchestration engine. Those are the
   host's (Claude Code / hermes). Do not reimplement them — you will lose to 18-months-ahead incumbents.
 
-## Boundary with leesearch-video-light (분담 — overlap 금지)
+## Boundary with the light path (분담 — overlap 금지)
 This is the **HEAVY path** (`leesearch-video-heavy`; local whisper ASR, audio-separation, OCR, frame
-sampling + a resumable ledger). The **LIGHT path** is **`leesearch-video-light`** (which wraps the
-`youtube-research` playbook: caption-available YouTube, free APIs, **no download / no ASR**). Routing is
-owned by the **`leesearch`** front-door:
-- captions exist / YouTube / cheap trend numbers → **`leesearch-video-light`** (cheaper, clearly lawful).
+sampling + a resumable ledger). The **LIGHT path** is the **`youtube-research`** playbook
+(caption-available YouTube, free APIs, **no download / no ASR**). Routing is
+owned by the **`leesearch`** route table:
+- captions exist / YouTube / cheap trend numbers → **`youtube-research`** (cheaper, clearly lawful).
 - no captions / foreign VO / off-YouTube (TikTok·IG) / deep multi-source → **this skill** (`leesearch-video-heavy`).
 Exactly **one** skill per source; both seal load-bearing claims through the **same** farm cite-or-fail gate.
 

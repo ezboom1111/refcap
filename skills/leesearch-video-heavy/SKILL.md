@@ -1,19 +1,19 @@
 ---
 name: leesearch-video-heavy
 description: >-
-  HEAVY video / deep content research — the local-extraction path under the leesearch front-door, and the
-  complement to leesearch-video-light. Use when the light path can't reach the bytes: a video with NO served
-  captions, a FOREIGN-language voice-over, a NON-YouTube source (TikTok / Instagram / Reels / podcast /
+  HEAVY video / deep content research — the local-extraction path under the leesearch route table, and the
+  complement to the light path (youtube-research). Use when the light path can't reach the bytes: a video with
+  NO served captions, a FOREIGN-language voice-over, a NON-YouTube source (TikTok / Instagram / Reels / podcast /
   arbitrary page), or a deep resumable MULTI-SOURCE investigation. It drives refcap's LOCAL extraction
   (whisper ASR, audio separation, OCR, frame sampling) via the refledger spine, keeps an append-only research
   ledger + resumable frontier, anchors every load-bearing claim to registered bytes (cite-or-fail), and seals
   findings as a tamper-evident Merkle bundle through the browser-agent-mcp-farm gate. A CONSUMER of the farm
   (imports it 0 — neutral). If the source is YouTube WITH captions and you only need cheap trend numbers, use
-  leesearch-video-light instead — never run both on the same source.
+  youtube-research instead — never run both on the same source.
 when_to_use: >-
   Research where the source has no captions, is foreign-language, is off-YouTube, or the work is a deep
   resumable multi-source dig — and conclusions must be traceable, reproducible, auditable. For cheap
-  caption-available YouTube, prefer leesearch-video-light.
+  caption-available YouTube, prefer youtube-research.
 host_contract: >-
   The HOST AGENT is the brain (decomposition, source choice, mid-stream adaptation, when-to-stop). This skill
   is the SPINE + heavy extractors: a thin disk-bound shared working memory (refledger.py) + an entrance to the
@@ -26,8 +26,8 @@ last_verified: 2026-06-09
 **Implementation lives at `C:\Users\이지범\refcap\`** — a separate, neutral repo that imports the farm 0.
 This is the leesearch heavy path; the full contract is `refcap\SKILL.md` and the loop is `RESEARCH_RUNBOOK.md`.
 
-## Boundary with leesearch-video-light (the one rule — do NOT overlap)
-| | `leesearch-video-light` (→ youtube-research) | `leesearch-video-heavy` (this) |
+## Boundary with the light path (the one rule — do NOT overlap)
+| | `youtube-research` (light) | `leesearch-video-heavy` (this) |
 |---|---|---|
 | Use when | YouTube **with** captions; cheap trend numbers | **No** captions / **foreign** VO / **off-YouTube** / deep multi-source |
 | Extraction | served captions + free APIs; **no download, no ASR** | **local whisper ASR, audio-sep, OCR, frame sampling** (refcap) |
