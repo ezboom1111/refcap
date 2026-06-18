@@ -29,6 +29,8 @@
 #   distil-large-v3.5 = REJECTED for Korean (English-only distillation: outputs English garbage, CER ~1-2).
 #   ghost613 turbo(KO)= REJECTED (repetition-loop hallucination "황 황 황…", CER 0.89-0.95, gate-blind).
 # Usage: python refrecord.py <seconds> <out_id> [model] [lang=ko]   (model=large-v3 -> accuracy mode)
+# ENV (ingest path): REFCAP_ASR_MODEL=large-v3-turbo -> fast single-pass for CLEAN VO (gate still escalates
+#   to large-v3 on hard audio); REFCAP_DOMAIN_PROMPT="<register>" -> override the priming prompt per domain.
 import sys, os, json, wave, re
 import numpy as np
 import soundcard as sc
@@ -47,7 +49,8 @@ SEPARATION_MODEL = "htdemucs_ft"   # tier-2 separator. BENCHMARKED: fine-tuned h
 # marginal clip from 91.6% -> 96.4% (prevented a segment-drop, fixed "털"->"허리"), neutral elsewhere,
 # with NO content-parroting (it names no products, only the register). large-v3+prompt is the verified
 # >=90% (in fact ~96%) accuracy config for clean Korean review VO.
-DOMAIN_PROMPT = "다음은 한국어 패션·제품 비교 리뷰 영상의 또박또박한 내레이션입니다."
+DOMAIN_PROMPT = os.environ.get("REFCAP_DOMAIN_PROMPT",
+                               "다음은 한국어 패션·제품 비교 리뷰 영상의 또박또박한 내레이션입니다.")
 
 # Known whisper hallucinations on non-speech / music (NEVER genuine VO in this domain). Matched on a
 # normalized form so spacing/punctuation variants are caught. Kept tight to avoid removing real lines.

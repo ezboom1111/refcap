@@ -92,7 +92,12 @@ def main():
             os.remove(ocr_json)
         except Exception:
             pass
-        res = R.process_wav(wav, R.ESCALATION_MODEL, "ko", rms, outdir, ocr_hint=hint or None)
+        # ASR model selectable via env. Default = ESCALATION_MODEL (large-v3 -> best-of-2; verified ~96% but
+        # CPU-slow). Set REFCAP_ASR_MODEL=large-v3-turbo for a fast single-pass on CLEAN VO (CER 0.019,
+        # ~RTF 0.3 = ~3min/10min on CPU). The coverage gate still auto-escalates to large-v3 if turbo output
+        # is flagged -> safe. Never blind-default turbo (benchmarked: hallucinates more on hard audio).
+        asr_model = os.environ.get("REFCAP_ASR_MODEL", R.ESCALATION_MODEL)
+        res = R.process_wav(wav, asr_model, "ko", rms, outdir, ocr_hint=hint or None)
         lang = "ko"
         seg_count = res["coverage"]["n_segments"]
         for junk in ("audio.wav", "vocals.wav"):   # don't hoard raw audio

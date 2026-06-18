@@ -1138,7 +1138,7 @@ def ingest(rdir, target, note=""):
         try:
             subprocess.run([sys.executable, script, target, "--note", note] if script == "refextract.py"
                            else [sys.executable, script, target, note],
-                           cwd=HERE, timeout=900, check=False)
+                           cwd=HERE, timeout=int(os.environ.get("REFCAP_INGEST_TIMEOUT_S", "2400")), check=False)
         except Exception as e:
             return {"error": f"video extract failed: {e}", "source": target}
         # find newest refs/<name>/transcript_timed.txt
