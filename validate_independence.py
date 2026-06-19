@@ -14,7 +14,7 @@ from collections import Counter
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-from refledger import (_read_jsonl, _host, triangulate, alpha_label, _MODALITY_CLASS, _resolve,
+from refledger import (_read_jsonl, _host, triangulate, alpha_label, debunk_label, _MODALITY_CLASS, _resolve,
                        _distinct_pred_count, _jaccard, _shingles, _NEAR_DUP_SIM, _SHINGLE_K,
                        _CJK_STOP, _EN_STOP)
 
@@ -127,7 +127,11 @@ def validate_independence(rdir, hypothesis_id=None):
         distinct_preds = _distinct_pred_count(predictions)
         raw_preds = len(predictions)
 
-        label = alpha_label(tri, stakes=stakes, distinct_predictions=distinct_preds, raw_predictions=raw_preds)
+        mode = hyp.get("mode", "discover")
+        if mode == "debunk":
+            label = debunk_label(tri, stakes=stakes, distinct_predictions=distinct_preds, raw_predictions=raw_preds)
+        else:
+            label = alpha_label(tri, stakes=stakes, distinct_predictions=distinct_preds, raw_predictions=raw_preds)
 
         confirming_signals = [s for s in tri.get("signals", []) if s.get("polarity") == "confirms"]
         echo_clusters = _detect_echo_clusters(confirming_signals)
@@ -145,7 +149,13 @@ def validate_independence(rdir, hypothesis_id=None):
         has_disconfirm = tri.get("disconfirming", 0) > 0
 
         evaluated += 1
-        passed = label.get("alpha", False) and not echo_clusters and not concentration_warning
+        if mode == "debunk":
+            # echo / host-concentration are ADVISORY for a debunk (a provenance debunk legitimately rests on one
+            # authoritative investigation restated by fact-checkers) — surfaced in `issues`, but only the verdict
+            # decides PASS. A debunk PASSES when it RESOLVED (CONFIRMED-FALSE or CONFIRMED-TRUE).
+            passed = label.get("resolved", False)
+        else:
+            passed = label.get("alpha", False) and not echo_clusters and not concentration_warning
         if not passed:
             all_pass = False
 

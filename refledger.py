@@ -307,7 +307,7 @@ def ledger_append(rdir, **row):
         return art
 
 
-def record_finding(rdir, text, label, artifact_id, quote="", locator="", confidence="med", corroborated_by=None, conclusion_id="", hypothesis_id="", polarity=""):
+def record_finding(rdir, text, label, artifact_id, quote="", locator="", confidence="med", corroborated_by=None, conclusion_id="", hypothesis_id="", polarity="", origin=""):
     """Local cite-or-fail: a finding MUST anchor to a registered artifact, else refuse.
     `quote` = the VERBATIM span from the artifact that grounds the claim (NOT the claim text - the farm
     gate rejects a claim whose anchor text is not literally in the cited bytes; learned e2e). `locator` =
@@ -326,7 +326,7 @@ def record_finding(rdir, text, label, artifact_id, quote="", locator="", confide
         raise ValueError(f"polarity must be confirms/disconfirms/neutral, got {polarity!r}")
     f = {"kind": "finding", "artifact_id": artifact_id, "text": text, "label": label, "quote": quote,
          "locator": locator, "confidence": confidence, "corroborated_by": cb, "conclusion_id": conclusion_id,
-         "hypothesis_id": hypothesis_id, "polarity": polarity, "ts": _now()}
+         "hypothesis_id": hypothesis_id, "polarity": polarity, "origin": origin, "ts": _now()}
     _append_jsonl(path, f)
     return f
 
@@ -863,18 +863,25 @@ def grade_conclusion(rdir, conclusion_id, standard_id, as_of=None):
 # agent ties a predict() to the thesis (so the bet is later resolved = non-circular). triangulate() REPORTS
 # independent convergence (distinct host AND modality) - it NEVER judges "is this alpha" or sets a threshold; that
 # judgment, the why-hidden, and the decay stay the agent's (code persists nouns + counts, like every other rank).
-def set_hypothesis(rdir, thesis, signature="", decay="", stakes=""):
+def set_hypothesis(rdir, thesis, signature="", decay="", stakes="", mode="discover"):
     """DECLARE a falsifiable alpha thesis. signature = the pattern in words; decay = why-hidden / when it stops
     being edge. stakes (''/low/med/high) = the agent's declared importance — it gates EFFORT, not modality: a
     high-stakes thesis that the digest finds at RECON shape (single-modality / echoed / no prediction) gets a loud
-    EFFORT-SHORTFALL warning. NOUN only (the inference + resolution are the agent's, via tagged signals + predict())."""
+    EFFORT-SHORTFALL warning. mode (discover/debunk) = the verdict AXIS: 'discover' assembles fragments into a
+    non-obvious inference (ALPHA/RECON); 'debunk' tests whether a widely-exposed claim is FALSE — frame the thesis
+    as the FALSIFICATION ('claim C is false/stale/misattributed') so primary contradictions register as confirms,
+    and the verdict speaks CONFIRMED-FALSE/TRUE/UNRESOLVED (measured 2026-06-19: a debunk framed as the popular
+    claim + disconfirm was mislabeled RECON 'no-confirming-signals' — a success that read as failure). NOUN only
+    (the inference + resolution are the agent's, via tagged signals + predict())."""
     if not str(thesis).strip():
         raise ValueError("thesis must be non-empty")
     if stakes not in ("", "low", "med", "high"):
         raise ValueError(f"stakes must be one of low/med/high (or '' = unspecified), got {stakes!r}")
+    if mode not in ("discover", "debunk"):
+        raise ValueError(f"mode must be discover/debunk, got {mode!r}")
     hid = "hyp_" + sha256_bytes(str(thesis).encode("utf-8"))[:12]    # id = thesis hash only (stakes is mutable metadata)
     row = {"kind": "hypothesis", "hypothesis_id": hid, "thesis": thesis, "signature": signature,
-           "decay": decay, "stakes": stakes, "ts": _now()}
+           "decay": decay, "stakes": stakes, "mode": mode, "ts": _now()}
     _append_jsonl(os.path.join(rdir, "ledger.jsonl"), row)
     return row
 
@@ -894,13 +901,22 @@ def triangulate(rdir, hypothesis_id):
     def _mod_of(f):
         return _MODALITY_CLASS.get(arts[f["artifact_id"]].get("type", ""), "other") if f.get("artifact_id") in arts else "other"
 
+    def _unit_of(f):
+        # The independent-OBSERVATION unit: an explicit `origin` tag (same press release / wire cycle / original
+        # investigation) collapses N outlets to ONE observation even across distinct hosts; absent an origin it
+        # falls back to the host (so existing data is unchanged). Measured G2: 5 of 6 "independent" hosts were one
+        # acquisition press cycle — host-counting overstated independence.
+        o = (f.get("origin") or "").strip()
+        return ("origin:" + o) if o else _host_of(f)   # namespaced so an origin string can't collide with a bare host
+
     def _facets(pol):
         fs = [f for f in sig if f.get("polarity") == pol]
         hosts = {h for h in (_host_of(f) for f in fs) if h}
-        return fs, hosts, {_mod_of(f) for f in fs}
+        units = {u for u in (_unit_of(f) for f in fs) if u}
+        return fs, hosts, units, {_mod_of(f) for f in fs}
 
-    conf, chosts, cmods = _facets("confirms")
-    disc, dhosts, _ = _facets("disconfirms")
+    conf, chosts, cunits, cmods = _facets("confirms")
+    disc, dhosts, dunits, _ = _facets("disconfirms")
     return {"hypothesis_id": hypothesis_id, "n_signals": len(sig),
             "confirming": len(conf), "disconfirming": len(disc),
             # distinct CLAIMS after collapsing near-IDENTICAL signal text (copy-paste echoes from >1 host inflate the
@@ -910,8 +926,11 @@ def triangulate(rdir, hypothesis_id):
             "independent_confirming_hosts": len(chosts), "confirming_modalities": sorted(cmods),
             "independent_disconfirming_hosts": len(dhosts),
             "net_independent": len(chosts) - len(dhosts),   # >0 = weak signals converge confirming (agent judges if decisive)
+            # origin-collapsed independence (== host counts when no `origin` tags are set; tighter when they are).
+            "independent_confirming_origins": len(cunits), "independent_disconfirming_origins": len(dunits),
+            "net_independent_origins": len(cunits) - len(dunits),
             "signals": [{"text": f.get("text"), "polarity": f.get("polarity"), "artifact_id": f.get("artifact_id"),
-                         "host": _host_of(f), "modality": _mod_of(f)} for f in sig]}
+                         "host": _host_of(f), "origin": (f.get("origin") or ""), "modality": _mod_of(f)} for f in sig]}
 
 
 # The alpha CONCEPT's default definition — domain/site/platform-NEUTRAL (names nothing perishable), and OVERRIDABLE
@@ -940,10 +959,14 @@ def alpha_label(tri, stakes="", distinct_predictions=None, raw_predictions=None,
     cdc = tri.get("confirming_distinct_claims", nconf)
     if c["no_echoed_claims"] and cdc < nconf:
         reasons.append(f"echoed-claims({nconf}->{cdc})")
-    if c["require_net_positive"] and tri.get("net_independent", 0) <= 0:
+    # independence is counted on origin-collapsed observations (falls back to host counts when no `origin` tags
+    # exist, so hand-built/legacy tri dicts behave identically); this also closes the event-echo gap for discover.
+    net_ind = tri.get("net_independent_origins", tri.get("net_independent", 0))
+    ind_hosts = tri.get("independent_confirming_origins", tri.get("independent_confirming_hosts", 0))
+    if c["require_net_positive"] and net_ind <= 0:
         reasons.append("no-net-independent-convergence")
-    if nconf and tri.get("independent_confirming_hosts", 0) < c["min_independent_hosts"]:
-        reasons.append(f"thin-independence({tri.get('independent_confirming_hosts', 0)}<{c['min_independent_hosts']})")
+    if nconf and ind_hosts < c["min_independent_hosts"]:
+        reasons.append(f"thin-independence({ind_hosts}<{c['min_independent_hosts']})")
     if c["require_distinct_predict"] and distinct_predictions == 0:
         reasons.append("no-falsifiable-prediction")
     elif c["require_distinct_predict"] and raw_predictions is not None and distinct_predictions is not None and raw_predictions > distinct_predictions:
@@ -959,6 +982,68 @@ def alpha_label(tri, stakes="", distinct_predictions=None, raw_predictions=None,
     egregious = bool(set(reasons) - {"single-modality"})
     warning = "HIGH-STAKES EFFORT SHORTFALL" if (shape == "RECON" and stakes == "high" and egregious) else ""
     return {"label": shape, "alpha": shape == "ALPHA", "reasons": reasons, "warning": warning}
+
+
+# DEBUNK-mode bar (the twin of _ALPHA_CRITERIA) — also agent-overridable per `criteria`. A debunk needs
+# CORROBORATION of the falsification, but the floor is 2 independent ORIGINS not 3: a provenance debunk is often
+# one authoritative original investigation + a primary archive, which is decisive without alpha's surprise-breadth.
+_DEBUNK_CRITERIA = {"min_net": 1, "min_independent_origins": 2}
+
+
+def debunk_label(tri, stakes="", distinct_predictions=None, raw_predictions=None, criteria=None):
+    """DEBUNK-mode verdict (claim-falsification — the twin of alpha_label's discovery verdict). The hypothesis is
+    the FALSIFICATION ('claim C is false/stale/misattributed'); CONFIRMING findings = PRIMARY contradictions of the
+    popular claim. SUCCESS = those corroborate across independent ORIGINS -> CONFIRMED-FALSE. If the falsification
+    is itself net-refuted -> CONFIRMED-TRUE (the popular claim actually holds). Else UNRESOLVED. Echo / single-
+    modality / missing-overturn-condition are ADVISORY for a debunk (a provenance debunk legitimately rests on one
+    authoritative investigation restated by fact-checkers), so they are REPORTED but do NOT flip a corroborated
+    verdict. Structural fix (measured 2026-06-19): a debunk hypothesis framed as the popular claim + disconfirm was
+    stamped RECON 'no-confirming-signals' — a successful debunk that read as a failed investigation."""
+    c = {**_DEBUNK_CRITERIA, **(criteria or {})}
+    nconf, ndisc = tri.get("confirming", 0), tri.get("disconfirming", 0)
+    iconf = tri.get("independent_confirming_origins", tri.get("independent_confirming_hosts", 0))
+    idisc = tri.get("independent_disconfirming_origins", tri.get("independent_disconfirming_hosts", 0))
+    # DERIVE net from the floor counts (== triangulate's net_independent_origins on the real path) rather than trusting
+    # tri['net_independent_origins'] independently: a hand-built/overridden tri whose net disagrees with iconf/idisc can
+    # no longer produce a verdict that contradicts the very counts it rests on. The strict >0/<0 guards also make a TIE
+    # (net==0) always UNRESOLVED regardless of an agent lowering min_net to 0 (the asymmetric tie-break footgun).
+    net = iconf - idisc
+    reasons = []
+    if nconf == 0 and ndisc == 0:
+        verdict = "UNRESOLVED"; reasons.append("no-signals")
+    elif net > 0 and net >= c["min_net"] and iconf >= c["min_independent_origins"]:
+        verdict = "CONFIRMED-FALSE"
+    elif net < 0 and -net >= c["min_net"] and idisc >= c["min_independent_origins"]:
+        verdict = "CONFIRMED-TRUE"        # the falsification is itself net-refuted -> the popular claim actually holds
+    else:
+        verdict = "UNRESOLVED"
+        if max(iconf, idisc) < c["min_independent_origins"]:
+            reasons.append(f"thin-independence({max(iconf, idisc)}<{c['min_independent_origins']})")
+        else:
+            reasons.append("balanced-evidence")   # both sides corroborated, neither nets past the bar (incl. a tie)
+    # advisory caveats — surfaced for honesty, never flip a resolved verdict (asymmetry vs alpha is deliberate). The
+    # echo/single-modality breadth checks read the CONFIRMING side, so they are suppressed on CONFIRMED-TRUE, where the
+    # DISCONFIRMING side is the load-bearing evidence (else a TRUE verdict looks weakly-sourced from the losing side).
+    if verdict != "CONFIRMED-TRUE":
+        cdc = tri.get("confirming_distinct_claims", nconf)
+        if cdc < nconf:
+            reasons.append(f"echoed-claims({nconf}->{cdc})")
+        if nconf and len(tri.get("confirming_modalities", [])) < 2:
+            reasons.append("single-modality")
+    if distinct_predictions == 0:
+        reasons.append("no-overturn-condition")          # a falsifiable 'what would overturn this' is good practice
+    elif raw_predictions is not None and distinct_predictions is not None and raw_predictions > distinct_predictions:
+        reasons.append(f"echoed-predictions({raw_predictions}->{distinct_predictions})")
+    resolved = verdict in ("CONFIRMED-FALSE", "CONFIRMED-TRUE")
+    warning = "HIGH-STAKES DEBUNK UNRESOLVED" if (not resolved and stakes == "high") else ""
+    return {"label": verdict, "resolved": resolved, "confirmed_false": verdict == "CONFIRMED-FALSE",
+            "reasons": reasons, "warning": warning}
+
+
+def verdict_label(tri, mode="discover", **kw):
+    """Route a triangulation to the right verdict function by hypothesis mode (two-brain: the spine REPORTS a
+    label, the agent judges). discover -> alpha_label (ALPHA/RECON); debunk -> debunk_label (CONFIRMED-*)."""
+    return debunk_label(tri, **kw) if mode == "debunk" else alpha_label(tri, **kw)
 
 
 def verify(rdir):
@@ -1238,8 +1323,8 @@ def digest(rdir):
         for hid, h in hyps_latest.items():
             t = triangulate(rdir, hid)
             preds_h = [p for p in pr if p.get("hypothesis_id", "") == hid]   # per-thesis raw vs distinct predictions
-            lab = alpha_label(t, stakes=h.get("stakes", ""),
-                              distinct_predictions=_distinct_pred_count(preds_h), raw_predictions=len(preds_h))
+            lab = verdict_label(t, mode=h.get("mode", "discover"), stakes=h.get("stakes", ""),
+                                distinct_predictions=_distinct_pred_count(preds_h), raw_predictions=len(preds_h))
             stamp = (f"[!{lab['warning']}] " if lab["warning"] else "") + "[" + lab["label"] + \
                     (": " + ", ".join(lab["reasons"]) if lab["reasons"] else "") + "]"
             L.append(f"- {h['thesis'][:90]}  [confirm {t['confirming']} (distinct {t['confirming_distinct_claims']}, "
@@ -1285,6 +1370,7 @@ def main():
     pf.add_argument("artifact_id"); pf.add_argument("--quote", default=""); pf.add_argument("--locator", default="")
     pf.add_argument("--confidence", default="med"); pf.add_argument("--corroborated", nargs="*", default=[])
     pf.add_argument("--conclusion", default=""); pf.add_argument("--hypothesis", default=""); pf.add_argument("--polarity", default="")
+    pf.add_argument("--origin", default="", help="independent-OBSERVATION id (same press cycle / investigation) — collapses event-echo")
     po = sub.add_parser("frontier"); po.add_argument("rdir"); po.add_argument("op", choices=["open", "close", "note", "visit", "state"])
     po.add_argument("item", nargs="?", default=""); po.add_argument("--kind", default="question"); po.add_argument("--reason", default="")
     for c in ("verify", "digest", "plan"):
@@ -1303,6 +1389,7 @@ def main():
     ph = sub.add_parser("hypothesis"); ph.add_argument("rdir"); ph.add_argument("thesis")   # Rank-7 alpha layer
     ph.add_argument("--signature", default=""); ph.add_argument("--decay", default="")
     ph.add_argument("--stakes", default="", choices=["", "low", "med", "high"])
+    ph.add_argument("--mode", default="discover", choices=["discover", "debunk"])
     pt = sub.add_parser("triangulate"); pt.add_argument("rdir"); pt.add_argument("hypothesis_id")
     a = ap.parse_args()
     if a.cmd == "open":
@@ -1312,7 +1399,7 @@ def main():
     if a.cmd == "ingest":
         print(json.dumps(ingest(rd, a.target, a.note), ensure_ascii=False))
     elif a.cmd == "finding":
-        print(json.dumps(record_finding(rd, a.text, a.label, a.artifact_id, a.quote, a.locator, a.confidence, a.corroborated, a.conclusion, a.hypothesis, a.polarity), ensure_ascii=False))
+        print(json.dumps(record_finding(rd, a.text, a.label, a.artifact_id, a.quote, a.locator, a.confidence, a.corroborated, a.conclusion, a.hypothesis, a.polarity, a.origin), ensure_ascii=False))
     elif a.cmd == "frontier":
         if a.op == "state":
             print(json.dumps(frontier_state(rd), ensure_ascii=False))
@@ -1345,7 +1432,7 @@ def main():
     elif a.cmd == "grade":
         print(json.dumps(grade_conclusion(rd, a.conclusion_id, a.standard_id, a.as_of), ensure_ascii=False))
     elif a.cmd == "hypothesis":
-        print(json.dumps(set_hypothesis(rd, a.thesis, a.signature, a.decay, a.stakes), ensure_ascii=False))
+        print(json.dumps(set_hypothesis(rd, a.thesis, a.signature, a.decay, a.stakes, a.mode), ensure_ascii=False))
     elif a.cmd == "triangulate":
         print(json.dumps(triangulate(rd, a.hypothesis_id), ensure_ascii=False))
 

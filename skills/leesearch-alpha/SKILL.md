@@ -11,8 +11,10 @@ description: >-
 when_to_use: >-
   Any "find the hidden/underrated/mispriced X by assembling public clues" request — where the answer is an
   inference from many weak public signals, not a lookup, and you want a falsifiable, continuously-refined,
-  reproducible (public-only) alpha pick rather than the obvious brand answer.
-last_verified: 2026-06-09
+  reproducible (public-only) alpha pick rather than the obvious brand answer. ALSO covers the twin DEBUNK mode:
+  "expose a widely-repeated/exposed claim as false / stale / misattributed by cross-referencing primary sources"
+  ("이거 진짜 맞아? / 거짓 아냐? / 낡은 통계 아냐?").
+last_verified: 2026-06-19
 ---
 
 # leesearch-alpha — public, continuous ALPHA discovery (router leaf)
@@ -42,6 +44,30 @@ last_verified: 2026-06-09
 4. **소멸/타이밍** — 알파는 *이르다*. priced-in 되면 사라짐 → `decay`가 "언제 먹나".
 
 핵심 판별: **수렴(convergence)보다 놀라움(surprise).** 모두가 같이 날 거라 *예상하는* 신호 조합은 알파 아님. 아무도 안 잇는 둘이 알파.
+
+## 두 모드 — DISCOVER(파편→추론) & DEBUNK(노출된 것 중 거짓) — 같은 loop/gate, FRAMING만 다름
+
+알파 탐색의 쌍둥이. **DISCOVER** = 흩어진 공개 파편을 아무도 안 한 추론으로 조립(위 4다리). **DEBUNK** = 널리
+노출돼 *합의처럼* 보이는 주장을 1차 출처에 대조해 거짓/왜곡/낡음을 잡는다. 엣지는 둘 다 *조립·대조*이지 접근이 아니다.
+파편 디벙크는 디스커버리의 **서브루틴**이기도 하다 — 알파 조립 중 load-bearing 파편이 주체 마케팅이면 1차 문서로 깨봐야 한다.
+
+**DEBUNK 규칙 (2026-06-19 11-thesis 배치 실측 기반):**
+1. **가설을 반증명제로 박아라** — "주장 C는 거짓/오귀속/낡음"으로 `set_hypothesis`. *절대 인기주장 자체를 가설로 두고
+   disconfirm하지 마라.* (실측: 인기주장을 가설로 두고 3개 독립권위로 반증하면 게이트가 `RECON: no-confirming-signals`로
+   찍어 — 성공한 디벙크가 실패로 보인다. 반증명제로 두면 같은 1차 모순이 confirms로 잡혀 net +3.)
+2. **먼저 주장을 측정가능 명제로 정밀화** — 단위+날짜+세그먼트. 모호하면 깨끗이 못 깨고 낡은 버전이 살아남는다
+   (실측 D4: "세계 제일 빠른 인터넷"이 fixed/mobile/요금/5G 중 뭔지 안 박으면 stale 평판이 생존; D2: "한 나라만큼"의 그 나라가 부유).
+3. **기원까지 추적** — 주장을 가장 이른 1차 출처까지 따라가라. 체인이 죽은/접근불가/마케팅 기원에서 끊기면
+   (죽은 건 Wayback) 그 **1차 출처의 부재 자체가 confirming 증거** (실측 D3: 8초 통계 체인이 폐쇄된 Statistic Brain에서 사망;
+   D5: QuoteInvestigator+Einstein Papers 도달 → 0.98 airtight).
+4. **2차가 아니라 1차에 대조** — 숫자는 그걸 인용한 블로그가 아니라 PRIMARY(CBECI·Ookla·라이선스 원문·아카이브)에.
+   1차가 JS/페이월/403이면 동의 브라우저·farm `byo_capture`로 올라가라 (집계 사이트로 타협 금지 — 실측 D2/D4의 최대 strain).
+
+**판정 어휘(DEBUNK):** `CONFIRMED-FALSE` / `CONFIRMED-TRUE` / `UNRESOLVED` (ALPHA/RECON 아님). 반증명제가 **독립
+기원 ≥2**에서 net-confirm이면 CONFIRMED-FALSE = **성공**; net-refute면 CONFIRMED-TRUE(인기주장이 실은 참); 얇으면
+UNRESOLVED. 깨끗한 디벙크는 알파만큼 가치 있다. **(2026-06-19 게이트에 네이티브 구현: `set_hypothesis --mode debunk` →
+digest/validate_independence가 위 어휘로 직접 판정; echo/single-modality는 디벙크에선 advisory라 verdict를 안 뒤집음.
+독립=기원이지 매체 아님은 `finding --origin <event-id>`가 같은 보도사이클/원조사 N매체를 1관측으로 접어 구현 — DISCOVER에도 적용.)**
 
 ## The loop (general — parameterize by thesis, not keywords)
 0. **합의 앵커** — 먼저 "이 질문의 뻔한/브랜드 답"을 1줄로 적어라(`frontier note` 또는 thesis `--decay`에). 알파는 그 **델타**다. 뻔한 답을 못 적으면 비합의 측정 불가 = 멈추고 테제 재설정. *(See `patterns/consensus-delta.md` for the procedure.)*
@@ -91,7 +117,11 @@ quotas got filled with news-repackaged JSON, ~36% genuine — counts buy confide
 ```bash
 SLUG=$(python refledger.py open "<investigation goal>")
 HID=$(python refledger.py hypothesis $SLUG "<thesis>" --signature "<pattern>" --decay "consensus=<뻔한답>; decays when <priced-in>" --stakes high | jq -r .hypothesis_id)
+# DEBUNK 모드: 가설을 반증명제로, --mode debunk → 게이트가 CONFIRMED-FALSE/TRUE/UNRESOLVED로 판정
+HID=$(python refledger.py hypothesis $SLUG "<claim C is FALSE/stale/misattributed>" --mode debunk --stakes med | jq -r .hypothesis_id)
 python refledger.py finding $SLUG "<signal>" OBSERVED $AID --quote "<verbatim>" --hypothesis $HID --polarity confirms
+# --origin: 같은 보도사이클/원조사를 재보도한 N매체를 1 독립관측으로 접는다 (event-echo; DISCOVER·DEBUNK 공통)
+python refledger.py finding $SLUG "<signal>" OBSERVED $AID --quote "<verbatim>" --hypothesis $HID --polarity confirms --origin "event:<press-cycle-or-investigation-id>"
 python refledger.py triangulate $SLUG $HID          # convergence REPORT (distinct host AND modality + distinct_claims)
 python refledger.py predict $SLUG "<falsifiable claim>" 0.6 --by 2027-06-30 --hypothesis $HID
 python refledger.py digest $SLUG                     # SUMMARY.md surfaces 가설+삼각측량+예측 + an ALPHA/RECON stamp
@@ -104,6 +134,15 @@ Then seal the load-bearing PUBLIC bytes through the farm cite-or-fail gate (brow
 - **LOGIN/MEMBER EXCLUDED.** Public-only = general + reproducible + ToS-clean.
 - **Surprise + survive-refutation, not just convergence.** N개가 수렴해도 *뻔하면* 알파 아님.
 - **독립성 ≥3, self 제외.** 2-host 수렴(특히 1개가 주체 자신의 페이지)은 ALPHA 아님.
+- **독립성 = 독립 *관측*이지 독립 *매체*가 아니다.** N개 매체가 한 사건·보도자료·원조사를 재보도 = 1 소스. 문구가
+  달라도 같은 기원이면 1로 접어라 (실측 G2: "독립 6호스트" 중 5개가 동일 인수 보도사이클; 디벙크 실측: 3 권위가 한 원조사
+  인용 → 게이트가 distinct 3→1로 정확히 접음). 게이트의 echo-collapse는 옳다 — 존중하라.
+- **INTENT vs PROOF.** 각 신호를 announced/stated/marketing/docs-exist(INTENT) vs demonstrated/measured/
+  independently-verified(PROOF)로 구분. ALPHA는 load-bearing 다리에 PROOF ≥1 필요 — intent만 수렴하면 RECON
+  (실측 G2: 발표전략 vs `3040 capacity` 실측에러; G1: "21개 통합 문서존재" ≠ 실채택). 정량·1차구조 데이터가 있는
+  테제가 알파로 수렴하기 가장 쉽다 (실측: 2 ALPHA = HBM filing + 로컬LLM 벤치, 둘 다 숫자 falsifiable).
+- **주체 마케팅 주장 → 1차 문서로 교차검증.** load-bearing 주장이 주체 자신의 마케팅이면 독립/1차 문서로 확인 전엔
+  카운트 금지 (실측 G1: "AWS 독점 파트너십" 마케팅이 AWS 공식문서로 반증 — fabrication-at-source).
 - **Wall escalation**: `JS_WALL` → farm RENDER; `BOT_WALL` → stop; `LOGIN_WALL` → excluded; `DOWNLOAD_ONLY` → local parse.
 - **EARN the missing data shape** — `RECON: missing-*` tells you which shape to earn. Read `evidence-budget.md`.
 - **cite-or-fail.** Only fetched bytes + verbatim quote. gate=OK proves quote EXISTS, not truth.
