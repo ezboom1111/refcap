@@ -74,6 +74,29 @@ Default behavior when the user does not answer:
   only when the child run's generated claims should be proof-gated; otherwise child runs are
   exploratory collection. This is not a platform crawler.
 
+## Primary content completion rule
+
+When the user asks to analyze content, strategy, BM, UI/UX, marketing, trend, alpha, or "what is
+useful here", do not count landing/profile/watch/search pages as deep reading. First translate the
+intent into content units, then either capture the matching primary artifact or mark the source as
+`URL_ONLY` / blocked and do not claim analysis.
+
+Minimum primary artifacts:
+- spoken video/audio: `TRANSCRIPT` from served captions or ASR;
+- visual video/shorts/demo/chart: timestamped frame screenshots and, when text matters, `FRAME_OCR`;
+- thumbnail/image/design/UI/layout: screenshot or image artifact, with OCR/visual inspection when
+  text or layout carries the claim;
+- social/community: target post/thread/replies `THREAD_TEXT`, not just a profile/feed page;
+- article/blog/page: main body `PAGE_TEXT`, not only title/meta/search result;
+- paper/report: relevant section `PDF_TEXT` or page body text;
+- API/market/price/trend data: `API_SCHEMA` for capability claims and `TIMESERIES`/snapshots for
+  behavior-over-time claims;
+- code/notebook/strategy rule: `CODE_READ` plus the concrete rule/config/function if it drives the
+  conclusion.
+
+This is a completion check, not a platform harness. Use it to keep the agent from stopping at cheap
+page text when the user's decision depends on primary content.
+
 ## Large-run source registry (anti-overclaim, not a harness)
 
 For any request that asks for many sources (`30+`, `100+`, "trend", "alpha", "비정형/정형/반정형",
