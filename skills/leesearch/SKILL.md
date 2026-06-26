@@ -25,6 +25,44 @@ last_verified: 2026-06-10
 few claims: register exact bytes → `farm_add_claim` (anchor = verbatim quote) → `farm_run_claim_gate`
 → `farm_export_bundle` (auto-verified on export). The farm is the VERIFIER, never the understanding engine.
 
+## Intent lock before focused capture / alpha
+
+Before any **focused 탐색**, trend read, competitor/price scrape, design/UI teardown, or Alpha Fusion
+run, first lock the user's intent. Do **not** capture every modality just because the farm can.
+If the request does not make the target decision and evidence shape obvious, ask 2-4 concise
+questions before gathering.
+
+Lock these fields:
+- `decision_needed`: what the answer will be used for (alpha pick, price compare, design teardown,
+  user-pain mining, trend watch, source verification, etc.).
+- `target_scope`: entity/product/person/place, geography/language, time horizon, and must-include /
+  must-exclude sources.
+- `evidence_shapes`: which modalities matter: text/HTML, structured prices/API fields, UI screenshot
+  or layout, OCR/image text, video frames, served captions/transcript, audio/ASR, map/place state, or
+  byte-faithful BYO.
+- `success_criteria`: what would count as useful, surprising, or decision-changing.
+- `boundaries`: login/profile permission, BYO allowance, and anti-bot/paywall/CAPTCHA refusal line.
+
+Default behavior when the user does not answer:
+- For T0/T1 low-risk work, continue with explicit provisional assumptions and label gaps.
+- For Alpha Fusion, do not stamp `ALPHA` from an under-specified intent. Mark it `RECON(<gap>)`
+  until the missing intent/evidence shape is resolved.
+- For visual/audio/video/design claims, do not infer from text-only capture. Route to screenshots,
+  OCR/frame sampling, served captions, or `leesearch-video-heavy` as appropriate.
+- When using `browser-agent-mcp-farm` directly, pass the lock into the run (`--intent`,
+  `--intent-scope`, `--intent-shapes`, `--success-criteria`, `--intent-boundaries`). The farm now
+  consumes this soft lock: `ui_screenshot` / `ocr_image_text` / `map_place_state` force browser full
+  capture instead of tier-0 HTTP/cache replay, and OCR falls back to the page screenshot when no frame
+  screenshots exist. Search-result surfaces also emit `search_result_candidates` with ranked titles,
+  URLs, matched query terms, and screenshot-presence signals. Each run also emits
+  `search_strategy_plan` search arms (current surface, cross-check, visual/review/community/video
+  leads, dissent probe) and, when candidates exist, a `candidate_deepening_ledger` that selects a
+  small follow-up queue. Read those artifacts before opening more destinations; if the plan shows
+  underspecified intent or the ledger cannot choose between visual/audio/price/design/alpha goals,
+  ask the user instead of widening blindly. For a completed farm search run, use
+  `node .\dist\cli.js search-followups --run-dir <runDir>` to write a bounded plan/outcome ledger;
+  add `--execute` only when deliberate follow-up capture is wanted. This is not a platform crawler.
+
 ## Route table
 
 | Source / need | Executor |
@@ -59,6 +97,9 @@ run T2 ceremony on a T0 question.
 ## Alpha Fusion notes (the rest lives in `leesearch-alpha`)
 
 - Declare the consensus baseline first; alpha = delta from it.
+- If the user's goal could mean different alphas (price, design, distribution, creator momentum,
+  product gap, sentiment, media/audio signal), ask before collecting. The edge depends on the
+  decision, not on grabbing more bytes.
 - Open a shape matrix (unstructured / semi / structured / video-audio / OCR — defined in
   `leesearch-alpha/evidence-budget.md`). For video: SEARCH first (30s), then judge materiality —
   "I didn't look" ≠ "not material". Capture only what is actually material.
