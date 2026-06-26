@@ -61,7 +61,9 @@ Default behavior when the user does not answer:
   underspecified intent or the ledger cannot choose between visual/audio/price/design/alpha goals,
   ask the user instead of widening blindly. For a completed farm search run, use
   `node .\dist\cli.js search-followups --run-dir <runDir>` to write a bounded plan/outcome ledger;
-  add `--execute` only when deliberate follow-up capture is wanted. This is not a platform crawler.
+  add `--execute` only when deliberate follow-up capture is wanted. Add `--child-final-claim-gate`
+  only when the child run's generated claims should be proof-gated; otherwise child runs are
+  exploratory collection. This is not a platform crawler.
 
 ## Route table
 
