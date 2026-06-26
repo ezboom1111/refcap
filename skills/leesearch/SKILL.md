@@ -107,6 +107,26 @@ Keep exploration alive: for alpha/trend work, leave budget for wildcard, dissent
 origin-trace, and adjacent-market leads. The registry prevents duplicate work and overclaiming; it
 does not rank truth, choose the alpha, or become canon.
 
+## Report closeout contract
+
+For T1/T2 multi-source reports, show trust status before final conclusions. Keep this visible and
+short; it is a state board, not a scoring engine.
+
+- `Run State`: `DISCOVERY_ONLY` / `PARTIAL_READ` / `DEEP_READ` / `QA_PASSED` / `SEALED`.
+- `Evidence Coverage`: counts by `evidence_state` (`URL_ONLY`, `PAGE_TEXT`, `TRANSCRIPT`, `SEALED`,
+  etc.).
+- `Trust Boundary`: label cited support as `internal_memory`, `registry_*`, `sealed_farm`, or
+  `unsupported`.
+- `Claim x Evidence Matrix`: map the load-bearing 3-7 claims to source_registry entries and mark
+  whether the evidence state is sufficient.
+- `Not Claimable Yet`: list conclusions blocked by `URL_ONLY`, missing transcript, missing
+  timeseries, blocked source, or unsealed evidence.
+- `Top 3 Deepening Candidates`: state why it matters, current evidence_state, minimum promotion
+  step, and whether BYO/profile is optional if blocked.
+
+Do not use numeric confidence, source-quality, or alpha scores unless the user explicitly asks.
+Prefer visible evidence states and short sufficiency labels.
+
 ## Route table
 
 | Source / need | Executor |
