@@ -80,10 +80,17 @@ digest/validate_independence가 위 어휘로 직접 판정; echo/single-modalit
    **Write the plan as a `frontier_open` note before gathering.** Do not start collecting until you have a source
    for each required shape — "web search only, fix later" is how you get stuck in RECON loops.
    *(See `patterns/shape-extraction.md` for practical extraction methods per shape.)*
+   For broad alpha hunts (`30+`, `100+`, multi-platform, "비정형/정형/반정형"), keep a lightweight source registry or
+   frontier ledger before synthesis. This is not a quota and not a ranking oracle; it only records which public
+   leads were tried, deduped, blocked, rejected, or left as `next_probe`.
 3. **Collect across ALL planned shapes** — interleave, don't serialize. Each `record_finding(hypothesis_id,
    polarity=confirms|disconfirms|neutral)` with a verbatim quote (cite-or-fail). Individually unconvincing is fine.
    **The shape comes from the artifact, not the source**: a gov page fetched as HTML = unstructured; the same page's
    table extracted to `.csv` = structured. Earn the shape by producing the artifact.
+   Track `evidence_state` per source: `URL_ONLY`, `PAGE_TEXT`, `PDF_TEXT`, `THREAD_TEXT`, `TRANSCRIPT`,
+   `FRAME_OCR`, `API_SCHEMA`, `TIMESERIES`, `CODE_READ`, `SEALED`. Do not say you watched a video unless
+   `TRANSCRIPT` or `FRAME_OCR` exists; do not say you checked structured data unless `TIMESERIES` exists;
+   do not treat an API docs page as more than `API_SCHEMA`. A source label is a lead, not proof.
 4. **`triangulate(hypothesis_id)`** — REPORTS independent convergence (distinct host AND modality among confirming
    signals, netted against disconfirming) + `confirming_distinct_claims` (string-near-identical echoes collapsed).
    YOU judge if it's decisive AND **surprising**; code sets no threshold.

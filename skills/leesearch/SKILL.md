@@ -42,6 +42,12 @@ Lock these fields:
   byte-faithful BYO.
 - `success_criteria`: what would count as useful, surprising, or decision-changing.
 - `boundaries`: login/profile permission, BYO allowance, and anti-bot/paywall/CAPTCHA refusal line.
+- `do_not_close_yet`: set true when this is active research/planning and the outcome is not ready.
+- `closeout_hook`: what future signal would close the work as useful, abandoned, adopted, refuted,
+  or still pending.
+- `lifecycle_hint`: how the run should be treated if it goes quiet. Inferred lifecycle states are
+  draft-only hints (`likely_closed`, `dormant`, `resurfaced`, `outcome_candidate`) and must not
+  auto-apply canon success/failure.
 
 Default behavior when the user does not answer:
 - For T0/T1 low-risk work, continue with explicit provisional assumptions and label gaps.
@@ -49,6 +55,9 @@ Default behavior when the user does not answer:
   until the missing intent/evidence shape is resolved.
 - For visual/audio/video/design claims, do not infer from text-only capture. Route to screenshots,
   OCR/frame sampling, served captions, or `leesearch-video-heavy` as appropriate.
+- If the user gives `closeout_hook` / `lifecycle_hint`, preserve it in the run report or closeout
+  draft. Let `loop lifecycle-hints` / vault closeout tooling score stale/resurfaced candidates;
+  do not turn lifecycle hints into durable skill rules.
 - When using `browser-agent-mcp-farm` directly, pass the lock into the run (`--intent`,
   `--intent-scope`, `--intent-shapes`, `--success-criteria`, `--intent-boundaries`). The farm now
   consumes this soft lock: `ui_screenshot` / `ocr_image_text` / `map_place_state` force browser full
@@ -64,6 +73,39 @@ Default behavior when the user does not answer:
   add `--execute` only when deliberate follow-up capture is wanted. Add `--child-final-claim-gate`
   only when the child run's generated claims should be proof-gated; otherwise child runs are
   exploratory collection. This is not a platform crawler.
+
+## Large-run source registry (anti-overclaim, not a harness)
+
+For any request that asks for many sources (`30+`, `100+`, "trend", "alpha", "비정형/정형/반정형",
+multi-platform, multi-modal, or resumable digging), create or update a lightweight source registry
+before synthesis when practical. This can be `<project>/cache/source_registry.jsonl`, a run-local
+ledger, or a project-specific intake script. Discovery still comes from native search, public APIs,
+user seeds, and platform exploration; the registry only dedupes, records status, and keeps the model
+from rereading the same source.
+
+Minimum fields: `url`, `query_or_seed`, `source_platform`, `source_type`, `evidence_state`, `status`,
+`duplicate_of`, `blocker_or_rejected_reason`, `next_probe`.
+
+Use these evidence states when reporting coverage:
+- `URL_ONLY`: link/title/result only.
+- `PAGE_TEXT`: page body/article text read.
+- `PDF_TEXT`: PDF/body text extracted.
+- `THREAD_TEXT`: public thread/comments read.
+- `TRANSCRIPT`: served captions or ASR transcript read.
+- `FRAME_OCR`: image/video frame or screenshot OCR inspected.
+- `API_SCHEMA`: API docs/schema inspected.
+- `TIMESERIES`: structured rows/snapshots collected.
+- `CODE_READ`: code/notebook/config read.
+- `SEALED`: load-bearing bytes gated by farm.
+
+Strict wording rule: source type is not evidence. A YouTube URL is not `TRANSCRIPT`; an API docs page
+is not `TIMESERIES`; a social URL is not `THREAD_TEXT`. Say `URL_ONLY scanned`, `PAGE_TEXT read`,
+`TRANSCRIPT read`, `FRAME_OCR inspected`, `TIMESERIES collected`, or `SEALED gated` as applicable.
+Never claim "watched/read/analyzed the video/thread/API data" from source labels alone.
+
+Keep exploration alive: for alpha/trend work, leave budget for wildcard, dissent, failure-story,
+origin-trace, and adjacent-market leads. The registry prevents duplicate work and overclaiming; it
+does not rank truth, choose the alpha, or become canon.
 
 ## Route table
 
