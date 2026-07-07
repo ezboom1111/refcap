@@ -179,9 +179,15 @@ Prefer visible evidence states and short sufficiency labels.
 | TLS 지문 403 돌파 | `curl_cffi` — ⚠ 한글 사용자명 PC는 CA 경로 버그: `CURL_CA_BUNDLE=C:/Users/Public/cacert.pem` 지정 필요 |
 | 무인 브라우저 CLI (모델 불문, a11y-tree 텍스트) | `agent-browser` 0.31.1 — 데몬 미다운로드(24/7 소비자 생기면 `agent-browser install`) |
 
-벽/빈껍데기 페이지 에스컬레이션 순서(싼 것부터): **URL 변형**(모바일 서브도메인/`.json`/`/rss`/PostView류)
-→ `curl_cffi` TLS 위장 → crawl4ai/farm headed → profile/byo. 변형-탐침을 자동으로 도는 엔진(insane-search)은
-소스감사+A/B 트라이얼 통과 시 이 행에 배선 예정([[2026-07-07-acquisition-tools-install-execution]]).
+벽/빈껍데기 페이지 에스컬레이션 순서(싼 것부터): **①known KR 레시피**(네이버 블로그=`m.blog`/`PostView` URL,
+아래 표) → **②insane-search 엔진**(unknown/harder 벽: 위장그리드+WAF프로파일+per-host 학습) → **③**`curl_cffi`
+단발 → crawl4ai/farm headed → profile/byo.
+
+- **insane-search 엔진 (vendored engine-only, 감사 2026-07-07 통과)**: `refcap/vendor/insane-search/`에서
+  `python -m engine <URL> [--json] [--device mobile] [--trace]`. SSRF가드+프롬프트인젝션탐지+로컬학습 내장,
+  플러그인 껍데기(phone-home·config주입)는 **의도적 제외**. **사각지대(실측)**: 모바일변형이 `www.X→m.X`만이라
+  `blog.naver.com→m.blog.naver.com`을 못 함 → **네이버 블로그는 ①번(직접 m./PostView)이 이김**. insane-search는
+  X/Reddit/Coupang 등 미지 벽·위장그리드가 필요할 때. (근거·A/B: [[2026-07-07-acquisition-tools-install-execution]])
 
 ## Effort ladder (token/thinking efficiency = accuracy devices PROPORTIONAL to stakes, never ceremony)
 
