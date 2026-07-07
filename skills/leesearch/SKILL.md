@@ -11,7 +11,7 @@ description: >-
 when_to_use: >-
   Research where the output feeds a real decision, document, or dispute — i.e. it needs cited,
   hash-verifiable evidence or a resumable ledger. For throwaway questions, skip this and answer natively.
-last_verified: 2026-06-10
+last_verified: 2026-07-07
 ---
 
 # leesearch — route table (not a router)
@@ -165,6 +165,24 @@ Prefer visible evidence states and short sufficiency labels.
 
 **Invariant: one executor per source** (never light + heavy on the same clip), not one executor per investigation.
 
+### 로컬 근육 인벤토리 (dev PC 실측 2026-07-07 — 여기 없는 설치도구는 호스트가 놓친다, 설치/제거 시 이 표를 갱신)
+
+| Need | 근육 (전부 설치·스모크 통과) |
+|---|---|
+| 기사/블로그 본문 정제 (html→본문 텍스트) | `trafilatura.extract(html)` |
+| JS 렌더링 SPA → 마크다운 | `crawl4ai` AsyncWebCrawler — **브라우저 티어**, http_fetch·URL변형 실패 후에만 |
+| RSS/Atom 수신·파싱 | `feedparser` |
+| PDF/DOCX/PPTX/XLSX → 마크다운 (표·스캔) | `docling` DocumentConverter |
+| 소셜 이미지 갤러리+메타 대량 | `gallery-dl` (공개=무로그인; 심화=버너쿠키+저속, 계정리스크) |
+| 영상/오디오/자막/메타 다운로드 | `yt-dlp` (2026.07.04 — TikTok 공개영상 무로그인 확정경로) |
+| 이미지/프레임 OCR **한국어** | `rapidocr_onnxruntime` RapidOCR — easyocr 대신 쓸 것(한국어 CER 약함) |
+| TLS 지문 403 돌파 | `curl_cffi` — ⚠ 한글 사용자명 PC는 CA 경로 버그: `CURL_CA_BUNDLE=C:/Users/Public/cacert.pem` 지정 필요 |
+| 무인 브라우저 CLI (모델 불문, a11y-tree 텍스트) | `agent-browser` 0.31.1 — 데몬 미다운로드(24/7 소비자 생기면 `agent-browser install`) |
+
+벽/빈껍데기 페이지 에스컬레이션 순서(싼 것부터): **URL 변형**(모바일 서브도메인/`.json`/`/rss`/PostView류)
+→ `curl_cffi` TLS 위장 → crawl4ai/farm headed → profile/byo. 변형-탐침을 자동으로 도는 엔진(insane-search)은
+소스감사+A/B 트라이얼 통과 시 이 행에 배선 예정([[2026-07-07-acquisition-tools-install-execution]]).
+
 ## Effort ladder (token/thinking efficiency = accuracy devices PROPORTIONAL to stakes, never ceremony)
 
 Pick the tier by what the answer feeds — and name the tier you picked in one line:
@@ -213,9 +231,13 @@ run T2 ceremony on a T0 question.
   **http_fetch가 403/빈껍데기면 멈추지 마라** → `profile`(동의된 로그인 세션) 또는 `byo_capture`
   (네가 실브라우저로 캡처, farm이 바이트 검증). 자율 봇/CAPTCHA 우회 금지.
 - **리뷰 조사**: 벽 낮은 소스부터 — 앱스토어 리뷰(공식 API), 커머스 리뷰, 무로그인 커뮤니티,
-  지도 리뷰, 유튜브 리뷰영상(→heavy). 네이버 PLACE 리뷰는 farm `naver_place_apollo` 추출기로 잡히지만
-  **BLOG 본문은 iframe(PostView)이라 빈 껍데기** → profile/byo로 iframe 본문까지, 카페=로그인=profile 전용.
-  해법은 "네이버를 뚫어라"가 아니라 "접근가능 소스 다변화 + 벽은 profile/byo".
+  지도 리뷰, 유튜브 리뷰영상(→heavy). 네이버 PLACE 리뷰는 farm `naver_place_apollo` 추출기로 잡힌다.
+  **BLOG 본문**: 데스크톱 `blog.naver.com/<id>/<logNo>`는 iframe(mainFrame) 껍데기(한글 ~4청크)지만,
+  `m.blog.naver.com/<id>/<logNo>` 또는 `blog.naver.com/PostView.naver?blogId=<id>&logNo=<logNo>`로
+  **URL만 바꾸면 본문이 http_fetch로 그대로 나온다** (실측 2026-07-07: 모바일 571·PostView 1337 한글청크,
+  curl_cffi 불필요·plain GET도 200). 포스트 발견은 `rss.blog.naver.com/<id>.xml`(50 item). → 블로그 본문은
+  **profile/byo 불필요, 모바일/PostView URL 변형 = http_fetch 티어**. 카페=로그인=profile 전용(이건 유효).
+  해법은 "네이버를 뚫어라"가 아니라 "접근가능 소스 다변화 + URL변형 우선, 남은 벽만 profile/byo".
 - **소셜/로그인벽 (클래스로 다뤄라)**: 자율 tier는 프로필 META만 줌 — 본문은 동의 브라우저
   (Claude=`claude-in-chrome`, 일반=headed/profile)로 보고 farm이 검증(=byo_capture). 동의 브라우저
   자체의 도메인 allowlist에 막히면(네이버가 그랬다) human byo나 대체원으로. 크리에이터 추세는
