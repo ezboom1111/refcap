@@ -185,9 +185,14 @@ Prefer visible evidence states and short sufficiency labels.
 
 - **insane-search 엔진 (vendored engine-only, 감사 2026-07-07 통과)**: `refcap/vendor/insane-search/`에서
   `python -m engine <URL> [--json] [--device mobile] [--trace]`. SSRF가드+프롬프트인젝션탐지+로컬학습 내장,
-  플러그인 껍데기(phone-home·config주입)는 **의도적 제외**. **사각지대(실측)**: 모바일변형이 `www.X→m.X`만이라
-  `blog.naver.com→m.blog.naver.com`을 못 함 → **네이버 블로그는 ①번(직접 m./PostView)이 이김**. insane-search는
-  X/Reddit/Coupang 등 미지 벽·위장그리드가 필요할 때. (근거·A/B: [[2026-07-07-acquisition-tools-install-execution]])
+  플러그인 껍데기(phone-home·config주입)는 **의도적 제외**. **사각지대(실측)**: url_transforms가 `www.X→m.X`·apex만이라
+  `blog.naver.com→m.blog.naver.com`(3-label) 변환을 **못 함**(설계상 도메인-불문 규칙만, 사이트명 참조 금지 →
+  네이버 특화는 엔진이 아니라 이 라우트 ①에 산다). ⚠️ **insane-search가 블로그를 못 하는 게 아니다** — 실측 2026-07-14:
+  데스크톱 `blog.naver.com/<id>/<logNo>`를 주면 17회 전부 `challenge`(껍데기 2938B)로 헛돎, 그러나 `m.blog.naver.com/<id>/<logNo>`를
+  주면 `ok:true`로 **본문 224KB 확보**(`--device mobile`은 host를 안 바꿔 무효). → **규칙: 네이버 블로그는 fetcher에 넘기기 전에
+  라우트 ①이 데스크톱→m.blog/PostView로 먼저 정규화**하라. 정규화 후엔 http_fetch(①, 최저가)가 이기고, 필요 시 insane-search도 됨.
+  데스크톱 URL을 insane-search에 그대로 던지지 마라(17회 낭비). insane-search는 X/Reddit/Coupang 등 미지 벽·위장그리드가 필요할 때.
+  (근거·A/B: [[2026-07-07-acquisition-tools-install-execution]] · 블로그 실측: [[2026-07-14-capture-insane-search-naver]])
 
 ## Effort ladder (token/thinking efficiency = accuracy devices PROPORTIONAL to stakes, never ceremony)
 
