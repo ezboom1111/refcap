@@ -262,9 +262,12 @@ run T2 ceremony on a T0 question.
   잘림 자가검증 가능하나 **감사 안 된 남의 서버 경유** — throwaway 읽기만, load-bearing 금지).
   ①②는 **장문이 ~280자에서 잘리고 스레드 후속타래도 안 나옴**. **완전·감사 경로는 opencli twitter
   thread/search(인증세션)** — 장문 전문·답글·지표까지, 2026-07-20 A/B 통과.
-- **NEVER(발견층 seam, 트라이얼 5b 실측 2026-07-20)**: 로그인벽 소스 읽기는 "트윗 하나 읽기"처럼
-  작아 보여도 **quick lookup이 아니다** — 네이티브로 프리랜싱하면 잘리거나 감사 안 된 프록시(fxtwitter)로
-  샌다. 로그인벽 소스는 개별 1건이라도 어댑터 티어(opencli)를 먼저 본다. 결과가 결정에 걸리면 반드시.
+- **발견층 실측(8각도 트라이얼 2026-07-20)**: leesearch 발동은 프레이밍 의존적 — 결정/자료 프레이밍
+  3/3 발동, casual/모호("뭐래·뭐 떠") 7/7 미발동(설명의 "quick=native"를 충실히 따름). 이건 대체로
+  올바른 설계다(casual에 의례 강제 금지 = 효율). 유일 잔여 위험 = **결정용인데 casual하게 프레이밍된**
+  로그인벽 읽기가 감사 안 된 프록시(fxtwitter)로 샐 때. 스킬 본문에 "로그인벽은 quick 아님"을 박아도
+  casual은 본문을 안 열어 무력함이 실측됨 — 이 seam의 하드 봉인은 훅뿐(재발 시). throwaway 읽기의
+  프리랜싱은 용인, load-bearing이면 fxtwitter 금지·어댑터/farm 경유.
 
 - **Acquisition tiers**: farm은 source별 가장 싼 viable tier를 고른다
   (`official_api → feed → http_fetch → model_extract → profile → headed → byo_capture`).
