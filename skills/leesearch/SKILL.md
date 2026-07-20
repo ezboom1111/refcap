@@ -254,6 +254,11 @@ run T2 ceremony on a T0 question.
 - **(벽 지도 갱신 2026-07-19, 832건 랜드스케이프 런 실측)** github/paper/HN/release = 네이티브
   심층률 63~100% 고수율 경로. X는 x-archive 우회 포함 URL_ONLY만 나옴 — 예산 낭비 경로로 취급.
   YouTube는 yt-dlp json3 서빙 자막 우선(ASR 불필요 — 이 런의 TRANSCRIPT 11건 전부 이 경로).
+- **(X 레시피 실측 2026-07-20)** 공개 X 포스트 무로그인 2경로: ①`publish.twitter.com/oembed?url=<포스트URL>`
+  ②`cdn.syndication.twimg.com/tweet-result?id=<id>&token=<base36((id/1e15)·π)에서 0과 . 제거>`.
+  둘 다 **장문(note_tweet)은 ~280자에서 잘리고 스레드 후속타래도 안 나옴** — 장문 전문은 동의
+  브라우저 필요. 실전 우회: 포스트가 가리키는 **1차 소스(GitHub/블로그)로 직행**이 보통 더 싸고
+  완전하다(2026-07-20 런: 소셜 7건 전부 이 방식으로 심층 완료).
 
 - **Acquisition tiers**: farm은 source별 가장 싼 viable tier를 고른다
   (`official_api → feed → http_fetch → model_extract → profile → headed → byo_capture`).
