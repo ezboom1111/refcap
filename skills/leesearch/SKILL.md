@@ -193,6 +193,7 @@ Prefer visible evidence states and short sufficiency labels.
 | 이미지/프레임 OCR **한국어** | `rapidocr_onnxruntime` RapidOCR — easyocr 대신 쓸 것(한국어 CER 약함) |
 | TLS 지문 403 돌파 | `curl_cffi` — ⚠ 한글 사용자명 PC는 CA 경로 버그: `CURL_CA_BUNDLE=C:/Users/Public/cacert.pem` 지정 필요 |
 | 무인 브라우저 CLI (모델 불문, a11y-tree 텍스트) | `agent-browser` 0.31.1 — 데몬 미다운로드(24/7 소비자 생기면 `agent-browser install`) |
+| **반복** 로그인벽 수집 (사이트→결정론 CLI 어댑터, 1회 학습→LLM 0콜 재실행) | `opencli` 1.8.6 (공급망 감사 2026-07-20 통과: 피시홈 0·확장 localhost-only·쿠키 스코프 강제. **수칙**: 공식 내장 어댑터만(어댑터=Node 코드 자동실행)·`plugin install` 금지·유휴 시 데몬 종료·전용 Chrome 프로필 권장. Browser Bridge 확장 필요) |
 
 벽/빈껍데기 페이지 에스컬레이션 순서(싼 것부터): **①known KR 레시피**(네이버 블로그=`m.blog`/`PostView` URL,
 아래 표) → **②insane-search 엔진**(unknown/harder 벽: 위장그리드+WAF프로파일+per-host 학습) → **③**`curl_cffi`
@@ -279,6 +280,10 @@ run T2 ceremony on a T0 question.
   (Claude=`claude-in-chrome`, 일반=headed/profile)로 보고 farm이 검증(=byo_capture). 동의 브라우저
   자체의 도메인 allowlist에 막히면(네이버가 그랬다) human byo나 대체원으로. 크리에이터 추세는
   cross-platform 삼각측량 + 공개 분석 사이트로 보강.
+  **반복성으로 실행자를 가른다(2026-07-20)**: 같은 로그인벽 소스를 주기적으로 긁는 워크로드는
+  `opencli` 어댑터(위 근육 표, 1회 학습→결정론 재실행) → 바이트는 farm 등록으로 검증. 1회성·시각
+  판단은 기존대로 claude-in-chrome. 무로그인으로 되는 소스는 언제나 그쪽 먼저(계정 리스크 0).
+  한 소스에 실행자 하나 — opencli 어댑터가 있는 소스에 claude-in-chrome을 겹치지 마라.
 
 ## Invariants (every route)
 
