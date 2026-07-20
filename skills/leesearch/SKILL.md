@@ -172,6 +172,7 @@ Prefer visible evidence states and short sufficiency labels.
 | YouTube **with** served captions, cheap trend numbers / spoken gist | `youtube-research` (caption-first, free APIs, no download, no ASR) |
 | Quantitative **time-series** need (velocity / decay of anything trackable) | `refcap/trendwatch.py` (standalone collector utility, NOT part of this skill's ceremony — see its docstring) |
 | Video **without** captions / foreign VO / TikTok·IG·non-YouTube / deep resumable dig | `leesearch-video-heavy` (refcap: whisper ASR, OCR, frames, resumable ledger) |
+| **로그인벽·플랫폼 데이터 읽기** (X·TikTok·IG·LinkedIn·논문·금융·트렌드 등 174 어댑터) — 특히 **반복** 수집 | `opencli <site> <cmd>` (어댑터 티어, 1회 학습→LLM 0콜; 근육 인벤토리 참조). 무로그인으로 되면 그쪽 먼저(계정 리스크 0), 1회성·시각 판단은 claude-in-chrome. 바이트는 farm 등록으로 검증. **소스가 막히면(429 등) 여기서 멈추지 말고 독립 소스로 폴백**(예: arxiv→openalex) — 그 판단이 이 표의 존재 이유다 |
 | Competitor / pricing / market-size numbers | farm directly with the `market_scan` claim types (see farm SKILL.md "Lens claim types") — corroborate across independent eTLD+1 domains |
 | User-pain / feature-gap / voice-of-customer | farm directly with the `product_planning` claim types (same section) |
 | Generic web / PDF / dashboard / long article | native gather (deep-research, WebSearch/WebFetch, `claude-in-chrome`) → seal load-bearing claims via farm. For a full gather→refute→seal→verify pass in one shot, run the `sealed-research` workflow (`Workflow({scriptPath: "~/.claude/workflows/sealed-research.js", args: {question, projectDir}})`) |
