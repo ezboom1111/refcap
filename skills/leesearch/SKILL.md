@@ -193,7 +193,7 @@ Prefer visible evidence states and short sufficiency labels.
 | 이미지/프레임 OCR **한국어** | `rapidocr_onnxruntime` RapidOCR — easyocr 대신 쓸 것(한국어 CER 약함) |
 | TLS 지문 403 돌파 | `curl_cffi` — ⚠ 한글 사용자명 PC는 CA 경로 버그: `CURL_CA_BUNDLE=C:/Users/Public/cacert.pem` 지정 필요 |
 | 무인 브라우저 CLI (모델 불문, a11y-tree 텍스트) | `agent-browser` 0.31.1 — 데몬 미다운로드(24/7 소비자 생기면 `agent-browser install`) |
-| **반복** 로그인벽 수집 (사이트→결정론 CLI 어댑터, 1회 학습→LLM 0콜 재실행) | `opencli` 1.8.6 (공급망 감사 2026-07-20 통과: 피시홈 0·확장 localhost-only·쿠키 스코프 강제. **수칙**: 공식 내장 어댑터만(어댑터=Node 코드 자동실행)·`plugin install` 금지·유휴 시 데몬 종료·전용 Chrome 프로필 권장. Browser Bridge 확장 필요. 어댑터 제작·수리 노하우는 자동주입 스킬 대신 패키지 내 `node_modules/@jackwener/opencli/skills/` 6종을 필요할 때 읽어라 — 기능은 CLI 자체문서(`opencli list`, `browser --help`)로 100% 사용 가능 실측) |
+| **반복** 로그인벽 수집 (사이트→결정론 CLI 어댑터, 1회 학습→LLM 0콜 재실행) | `opencli` 1.8.6 (공급망 감사 2026-07-20 통과: 피시홈 0·확장 localhost-only·쿠키 스코프 강제. **수칙**: 공식 내장 어댑터만(어댑터=Node 코드 자동실행)·`plugin install` 금지·유휴 시 데몬 종료·전용 Chrome 프로필 권장. Browser Bridge 확장 필요. 어댑터 제작·수리 노하우는 자동주입 스킬 대신 패키지 내 `node_modules/@jackwener/opencli/skills/` 6종을 필요할 때 읽어라 — 기능은 CLI 자체문서(`opencli list`, `browser --help`)로 100% 사용 가능 실측. **A/B 실측 통과 2026-07-20**: X 장문 전문+답글 7.9s·LLM 0콜 — oEmbed 164자 잘림·동의브라우저 미연결 대비 유일 완전 경로) |
 
 벽/빈껍데기 페이지 에스컬레이션 순서(싼 것부터): **①known KR 레시피**(네이버 블로그=`m.blog`/`PostView` URL,
 아래 표) → **②insane-search 엔진**(unknown/harder 벽: 위장그리드+WAF프로파일+per-host 학습) → **③**`curl_cffi`
