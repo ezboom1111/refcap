@@ -256,11 +256,15 @@ run T2 ceremony on a T0 question.
 - **(벽 지도 갱신 2026-07-19, 832건 랜드스케이프 런 실측)** github/paper/HN/release = 네이티브
   심층률 63~100% 고수율 경로. X는 x-archive 우회 포함 URL_ONLY만 나옴 — 예산 낭비 경로로 취급.
   YouTube는 yt-dlp json3 서빙 자막 우선(ASR 불필요 — 이 런의 TRANSCRIPT 11건 전부 이 경로).
-- **(X 레시피 실측 2026-07-20)** 공개 X 포스트 무로그인 2경로: ①`publish.twitter.com/oembed?url=<포스트URL>`
-  ②`cdn.syndication.twimg.com/tweet-result?id=<id>&token=<base36((id/1e15)·π)에서 0과 . 제거>`.
-  둘 다 **장문(note_tweet)은 ~280자에서 잘리고 스레드 후속타래도 안 나옴** — 장문 전문은 동의
-  브라우저 필요. 실전 우회: 포스트가 가리키는 **1차 소스(GitHub/블로그)로 직행**이 보통 더 싸고
-  완전하다(2026-07-20 런: 소셜 7건 전부 이 방식으로 심층 완료).
+- **(X 레시피 실측 2026-07-20)** 공개 X 포스트 무로그인 경로: ①`publish.twitter.com/oembed?url=<포스트URL>`
+  ②`cdn.syndication.twimg.com/tweet-result?id=<id>&token=<base36((id/1e15)·π)에서 0과 . 제거>`
+  ③서드파티 프록시 `api.fxtwitter.com/<user>/status/<id>`(장문 note_tweet 완본 반환·display_text_range로
+  잘림 자가검증 가능하나 **감사 안 된 남의 서버 경유** — throwaway 읽기만, load-bearing 금지).
+  ①②는 **장문이 ~280자에서 잘리고 스레드 후속타래도 안 나옴**. **완전·감사 경로는 opencli twitter
+  thread/search(인증세션)** — 장문 전문·답글·지표까지, 2026-07-20 A/B 통과.
+- **NEVER(발견층 seam, 트라이얼 5b 실측 2026-07-20)**: 로그인벽 소스 읽기는 "트윗 하나 읽기"처럼
+  작아 보여도 **quick lookup이 아니다** — 네이티브로 프리랜싱하면 잘리거나 감사 안 된 프록시(fxtwitter)로
+  샌다. 로그인벽 소스는 개별 1건이라도 어댑터 티어(opencli)를 먼저 본다. 결과가 결정에 걸리면 반드시.
 
 - **Acquisition tiers**: farm은 source별 가장 싼 viable tier를 고른다
   (`official_api → feed → http_fetch → model_extract → profile → headed → byo_capture`).
