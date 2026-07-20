@@ -4,10 +4,14 @@ description: >-
   Lee's research route-table (이지범's personal layer). Invoke when research conclusions must be
   TRACEABLE / RE-VERIFIABLE (farm-sealed bundle, cited numbers that survive scrutiny, alpha picks,
   resumable multi-source digs) — or when unsure which research executor fits. Do NOT invoke for a
-  quick lookup or casual question: answer those with native search/research directly, no ceremony.
-  Operating principle: GATHER with the host's native abilities (search, deep-research, consented
-  browser), SEAL the load-bearing few claims through the browser-agent-mcp-farm gate. Say
-  "leesearch <goal>" to force it.
+  quick lookup or casual question you can answer from knowledge: answer those natively, no ceremony.
+  BUT reading a specific login-walled social post (X thread/long-form, TikTok, Instagram) — even ONE,
+  even casual — is NOT a native lookup: native fetch silently truncates (~280 chars) or bot-gates and
+  the agent flails (measured 2026-07-20: casual login-wall reads failed ~43%, one burned 5 dead
+  attempts while the installed opencli adapter sat unused). Check this route-table's adapter tier
+  first for those. Operating principle: GATHER with the host's native abilities (search, deep-research,
+  consented browser) + opencli adapters for login-walled sources, SEAL the load-bearing few claims
+  through the browser-agent-mcp-farm gate. Say "leesearch <goal>" to force it.
 when_to_use: >-
   Research where the output feeds a real decision, document, or dispute — i.e. it needs cited,
   hash-verifiable evidence or a resumable ledger. For throwaway questions, skip this and answer natively.
@@ -292,6 +296,10 @@ run T2 ceremony on a T0 question.
   `opencli` 어댑터(위 근육 표, 1회 학습→결정론 재실행) → 바이트는 farm 등록으로 검증. 1회성·시각
   판단은 기존대로 claude-in-chrome. 무로그인으로 되는 소스는 언제나 그쪽 먼저(계정 리스크 0).
   한 소스에 실행자 하나 — opencli 어댑터가 있는 소스에 claude-in-chrome을 겹치지 마라.
+  **어댑터 커버리지는 명령 단위로 확인하라(실측 2026-07-20)**: opencli twitter는 `thread/article/search`로
+  개별 포스트 본문까지 되지만, opencli **tiktok/instagram은 user/search/trending(계정·검색·트렌드) 위주**라
+  **"특정 영상/릴스 1건 내용 읽기" 명령이 없다** — 개별 공개 영상은 `yt-dlp`, 개별 시각/릴스는
+  claude-in-chrome이 맞는 실행자. `opencli list`로 그 사이트가 실제 가진 cmd를 먼저 봐라.
 
 ## Invariants (every route)
 
