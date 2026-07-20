@@ -20,11 +20,54 @@ def run(args):
     subprocess.run(args, check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
+# 프레임 예산(2026-07-20, claude-video 계열 A/B 후 이식): 긴 영상에서 backbone이 프레임을
+# 무한정 쏟아내던 구멍을 막는다. 상한 초과분은 균등 솎아내기 — 시간축 커버리지는 유지.
+MODE_CAPS = {"efficient": 50, "balanced": 100, "burner": 0}
+
+
+def _thin(files, cap):
+    if cap <= 0 or len(files) <= cap:
+        return files, []
+    step = len(files) / cap
+    keep_idx = {int(i * step) for i in range(cap)}
+    keep = [f for i, f in enumerate(files) if i in keep_idx]
+    return keep, [f for i, f in enumerate(files) if i not in keep_idx]
+
+
+def _dedup_frames(frames_dir, files, threshold=4):
+    """근접 중복 프레임 제거(aHash 8x8, 해밍<=threshold). PIL 없으면 무동작 — 절대 실패 금지."""
+    try:
+        from PIL import Image
+    except ImportError:
+        return files, []
+    kept, dropped, hashes = [], [], []
+    for f in files:
+        try:
+            im = Image.open(os.path.join(frames_dir, f)).convert("L").resize((8, 8))
+            px = list(im.getdata())
+            avg = sum(px) / 64.0
+            h = sum(1 << i for i, p in enumerate(px) if p > avg)
+        except Exception:
+            kept.append(f); continue
+        if any(bin(h ^ prev).count("1") <= threshold for prev in hashes):
+            dropped.append(f)
+        else:
+            hashes.append(h); kept.append(f)
+    for f in dropped:
+        try:
+            os.remove(os.path.join(frames_dir, f))
+        except OSError:
+            pass
+    return kept, dropped
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("video")
     ap.add_argument("--note", default="")
     ap.add_argument("--model", default="small")
+    ap.add_argument("--mode", choices=["efficient", "balanced", "burner"], default="balanced",
+                    help="efficient=키프레임만+상한50(긴 영상 고속) / balanced=스마트샘플링+상한100(기본) / burner=무상한(기존 동작)")
     args = ap.parse_args()
 
     video = os.path.abspath(args.video)
@@ -48,14 +91,28 @@ def main():
     except Exception:
         dur = 0.0
 
-    # SMART sampling (not uniform): hook is where the scroll-stop happens; scene changes carry the editing rhythm.
-    run([ffmpeg, "-y", "-ss", "0", "-t", "3", "-i", video, "-vf", "fps=2", os.path.join(frames, "hook_%02d.jpg")])            # hook 0-3s @2fps
-    run([ffmpeg, "-y", "-i", video, "-vf", "select='gt(scene,0.4)',showinfo", "-vsync", "vfr", os.path.join(frames, "scene_%03d.jpg")])  # cuts/transitions
-    run([ffmpeg, "-y", "-i", video, "-vf", "fps=1/3", os.path.join(frames, "bb_%03d.jpg")])                                   # backbone 1/3s
+    if args.mode == "efficient":
+        # 키프레임만 디코드(-skip_frame nokey) = 풀디코드 3회 대비 수십 배 빠름. 훅/엔드는 유지.
+        run([ffmpeg, "-y", "-skip_frame", "nokey", "-i", video, "-vsync", "vfr",
+             "-frame_pts", "1", os.path.join(frames, "key_%04d.jpg")])
+        run([ffmpeg, "-y", "-ss", "0", "-i", video, "-frames:v", "1", os.path.join(frames, "hook_01.jpg")])
+    else:
+        # SMART sampling (not uniform): hook is where the scroll-stop happens; scene changes carry the editing rhythm.
+        run([ffmpeg, "-y", "-ss", "0", "-t", "3", "-i", video, "-vf", "fps=2", os.path.join(frames, "hook_%02d.jpg")])            # hook 0-3s @2fps
+        run([ffmpeg, "-y", "-i", video, "-vf", "select='gt(scene,0.4)',showinfo", "-vsync", "vfr", os.path.join(frames, "scene_%03d.jpg")])  # cuts/transitions
+        run([ffmpeg, "-y", "-i", video, "-vf", "fps=1/3", os.path.join(frames, "bb_%03d.jpg")])                                   # backbone 1/3s
     if dur > 1:
         run([ffmpeg, "-y", "-ss", str(max(0.0, dur - 0.5)), "-i", video, "-frames:v", "1", os.path.join(frames, "end.jpg")])  # CTA/end
 
     frame_files = sorted(os.path.basename(p) for p in glob.glob(os.path.join(frames, "*.jpg")))
+    frame_files, deduped = _dedup_frames(frames, frame_files)
+    cap = MODE_CAPS.get(args.mode, 0)
+    frame_files, thinned = _thin(frame_files, cap)
+    for f in thinned:
+        try:
+            os.remove(os.path.join(frames, f))
+        except OSError:
+            pass
 
     transcript_path = os.path.join(outdir, "transcript_timed.txt")
     seg_count = 0
@@ -109,10 +166,15 @@ def main():
         with open(transcript_path, "w", encoding="utf-8") as f:
             f.write("# transcript FAILED: %s: %s\n" % (type(e).__name__, e))
 
-    meta = {"video": video, "note": args.note, "durationSec": round(dur, 1), "frames": frame_files, "frameCount": len(frame_files), "transcriptSegments": seg_count, "language": lang, "ocr": ocr_meta, "outdir": outdir}
+    meta = {"video": video, "note": args.note, "durationSec": round(dur, 1), "mode": args.mode,
+            "frames": frame_files, "frameCount": len(frame_files), "dedupDropped": len(deduped),
+            "capThinned": len(thinned), "transcriptSegments": seg_count, "language": lang,
+            "ocr": ocr_meta, "outdir": outdir}
     with open(os.path.join(outdir, "meta.json"), "w", encoding="utf-8") as f:
         json.dump(meta, f, ensure_ascii=False, indent=2)
-    print(json.dumps({"ok": True, "outdir": outdir, "frameCount": len(frame_files), "transcriptSegments": seg_count, "durationSec": round(dur, 1), "language": lang}, ensure_ascii=False, indent=2))
+    print(json.dumps({"ok": True, "outdir": outdir, "mode": args.mode, "frameCount": len(frame_files),
+                      "dedupDropped": len(deduped), "capThinned": len(thinned),
+                      "transcriptSegments": seg_count, "durationSec": round(dur, 1), "language": lang}, ensure_ascii=False, indent=2))
 
 
 if __name__ == "__main__":
