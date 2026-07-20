@@ -151,7 +151,10 @@ does not rank truth, choose the alpha, or become canon.
 - **정보재 평가 배선 (실측 2026-07-20 — sweep을 채점 모델에 먹여라)**: 수집은 discovery지만
   거기서 멈추면 engagement 줄세우기로 오도된다(별점·조회수 ≠ 신뢰성·신선도). 정보재 평가 모델은
   이미 vault에 있다 = `loop quality`(src=신뢰성/발행자, fresh=신선도[published_at 우선], corr=검증/반증,
-  creative_span=알파성격) + `loop eval`(outcome→가중치 자기보정). 배선:
+  creative_span=알파성격). **자기발전 아님(실측 2026-07-20)**: QUALITY_WEIGHTS는 손튜닝 상수, `loop eval`은
+  판단 IC를 **측정만** 하고 가중치를 자동 갱신 안 함 — outcome→weight 루프는 코드에 안 닫혀 있고(사람 단계)
+  아직 미실행. 통합 리랭크는 실증됨(4후보 실채점: freshness가 llm_wiki 1.0 > claude-obsidian 0.44 > Karpathy
+  0.19로 별점 오도를 교정). 단 전부 저점(31~39)·weak provenance = 미검증 discovery라 모델이 과claim 거부. 배선:
   ① **수집 시점에** `source_platform`·`published_at`(captured_at 아님)·`evidence_state`를 각 아이템에 찍어라.
   ② discovery 끝나면 **survivor만**(전부 아님) draft 노트로 승격 → `loop quality`가 채점.
   ③ load-bearing 숫자는 farm 봉인(T2) → outcome이 나면 settle → 채점자 재보정.
