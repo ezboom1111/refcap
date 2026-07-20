@@ -11,7 +11,7 @@ description: >-
 when_to_use: >-
   Research where the output feeds a real decision, document, or dispute — i.e. it needs cited,
   hash-verifiable evidence or a resumable ledger. For throwaway questions, skip this and answer natively.
-last_verified: 2026-07-07
+last_verified: 2026-07-20
 ---
 
 # leesearch — route table (not a router)
@@ -130,6 +130,21 @@ Keep exploration alive: for alpha/trend work, leave budget for wildcard, dissent
 origin-trace, and adjacent-market leads. The registry prevents duplicate work and overclaiming; it
 does not rank truth, choose the alpha, or become canon.
 
+## 병렬 대량 수집 프로토콜 (실측 2026-07-18~19, 832건 런 — 3웨이브 재발·소비 확정)
+
+30건+ 수집은 서브에이전트 팬아웃으로. 규칙은 전부 실사고에서 나왔다:
+
+- **각 에이전트는 결과를 `<project>/runs/<slug>/` JSON 파일로 직접 Write한다** — 에이전트의 최종
+  텍스트 응답은 메인에 전달되지 않아 유실된다(실사고 1회 후 3웨이브 확정 경로). 메인에는
+  SendMessage 요약만 보낸다.
+- 파일 계약: `{items:[{url, source_platform, evidence_state, ...}]}` — source_registry 스키마
+  그대로. 메인이 merge→dedupe 후에만 합성한다(생파일 순서 주의: 큐레이트본보다 raw 덤프를 먼저
+  merge하면 레지스트리가 오염된다 — 실사고 1회).
+- **URL_ONLY 침전 법칙**: 대량 스윕은 blog 55%·youtube 61%·reddit 62%가 URL_ONLY로 남는다(832건
+  실측). 합성에서 URL_ONLY 행 인용 금지, 심층 읽기는 후보선정 2차 패스로 분리하라.
+- `blocker_or_rejected_reason`을 **수집 시점에** 기록하라 — 832건 런은 0건 기록해 벽 지도를
+  사후 복원해야 했다.
+
 ## Report closeout contract
 
 For T1/T2 multi-source reports, show trust status before final conclusions. Keep this visible and
@@ -236,13 +251,19 @@ run T2 ceremony on a T0 question.
 
 ## 한국 소스 벽 (측정 2026-06-09 · 벽은 변함 — 막히면 재측정)
 
+- **(벽 지도 갱신 2026-07-19, 832건 랜드스케이프 런 실측)** github/paper/HN/release = 네이티브
+  심층률 63~100% 고수율 경로. X는 x-archive 우회 포함 URL_ONLY만 나옴 — 예산 낭비 경로로 취급.
+  YouTube는 yt-dlp json3 서빙 자막 우선(ASR 불필요 — 이 런의 TRANSCRIPT 11건 전부 이 경로).
+
 - **Acquisition tiers**: farm은 source별 가장 싼 viable tier를 고른다
   (`official_api → feed → http_fetch → model_extract → profile → headed → byo_capture`).
   anti-bot/로그인 소스는 `headed_only` — farm은 자율로 뚫지 않는다 (lawful-refusal, 설계).
   **http_fetch가 403/빈껍데기면 멈추지 마라** → `profile`(동의된 로그인 세션) 또는 `byo_capture`
   (네가 실브라우저로 캡처, farm이 바이트 검증). 자율 봇/CAPTCHA 우회 금지.
 - **리뷰 조사**: 벽 낮은 소스부터 — 앱스토어 리뷰(공식 API), 커머스 리뷰, 무로그인 커뮤니티,
-  지도 리뷰, 유튜브 리뷰영상(→heavy). 네이버 PLACE 리뷰는 farm `naver_place_apollo` 추출기로 잡힌다.
+  지도 리뷰, 유튜브 리뷰영상(→heavy). ⚠️ 네이버 PLACE: farm `naver_place_apollo`는 Place
+  **엔트리(목적지) 추출기**이지 리뷰 본문 추출기가 아니며, 감사 실측(2026-07-20) 결과 프로덕션
+  미배선(테스트만 임포트하는 죽은 모듈)이다 — PLACE 리뷰 본문 경로는 재실측 전 미확정으로 취급하라.
   **BLOG 본문**: 데스크톱 `blog.naver.com/<id>/<logNo>`는 iframe(mainFrame) 껍데기(한글 ~4청크)지만,
   `m.blog.naver.com/<id>/<logNo>` 또는 `blog.naver.com/PostView.naver?blogId=<id>&logNo=<logNo>`로
   **URL만 바꾸면 본문이 http_fetch로 그대로 나온다** (실측 2026-07-07: 모바일 571·PostView 1337 한글청크,

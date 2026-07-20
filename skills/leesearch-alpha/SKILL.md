@@ -14,7 +14,7 @@ when_to_use: >-
   reproducible (public-only) alpha pick rather than the obvious brand answer. ALSO covers the twin DEBUNK mode:
   "expose a widely-repeated/exposed claim as false / stale / misattributed by cross-referencing primary sources"
   ("이거 진짜 맞아? / 거짓 아냐? / 낡은 통계 아냐?").
-last_verified: 2026-06-19
+last_verified: 2026-07-20
 ---
 
 # leesearch-alpha — public, continuous ALPHA discovery (router leaf)

@@ -18,7 +18,7 @@ host_contract: >-
   The HOST AGENT is the brain (decomposition, source choice, mid-stream adaptation, when-to-stop). This skill
   is the SPINE + heavy extractors: a thin disk-bound shared working memory (refledger.py) + an entrance to the
   farm's deterministic evidence gate. It imports the farm 0 (neutrality).
-last_verified: 2026-06-18
+last_verified: 2026-07-20
 ---
 
 # leesearch-video-heavy (heavy / deep, farm-verified)
