@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/ezboom1111/refcap/actions/workflows/ci.yml/badge.svg)](https://github.com/ezboom1111/refcap/actions/workflows/ci.yml)
 [![Python 3.9+](https://img.shields.io/badge/Python-3.9%2B-3776AB?logo=python&logoColor=white)](#요구-사항)
-[![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](./LICENSE)
+[![License: Source-Available](https://img.shields.io/badge/License-Source--Available_(view--only)-lightgrey.svg)](./LICENSE)
 
 > *refcap is a personal content-reference + multi-source research toolkit: an append-only,
 > cite-or-fail research ledger (stdlib-only Python) plus local media extraction (whisper ASR,
@@ -235,6 +235,9 @@ JSON 하나뿐입니다. 이 중립성 자체가 설계 원칙 3번입니다 —
 
 ## 라이센스
 
-[Apache-2.0](./LICENSE) © 2026 이지범.
-`vendor/insane-search/`는 원저작자(fivetaku)의 MIT 라이센스를 따르며
+**소스공개 — 열람·평가 전용** ([LICENSE](./LICENSE)). © 2026 이지범, all
+rights reserved. 포트폴리오 열람과 저자의 작업을 평가하기 위한 무수정 로컬
+실행만 허용되며, 그 외의 사용·복제·수정·재배포는 사전 서면 허가 없이
+금지됩니다(문의: ezboom1111@gmail.com).
+`vendor/insane-search/`는 원저작자(fivetaku)의 **MIT** 라이센스를 따르며
 `vendor/insane-search/LICENSE`·`PROVENANCE.md`로 귀속을 유지합니다.
