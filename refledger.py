@@ -16,6 +16,8 @@
 #
 # stdlib only. farm import 0 (neutrality). Korean-path safe (ascii dir leaf + utf-8 + ensure_ascii=False).
 import os, sys, json, re, hashlib, datetime, argparse, subprocess, urllib.request, urllib.parse, ipaddress, socket, threading, contextlib
+import ntpath
+import posixpath
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 # capture-quality labels that make a citation UNTRUSTWORTHY -> verify warns + farm_plan tags [WARN].
@@ -70,24 +72,28 @@ def _file_lock(rdir):
         f.close()
 
 
-_DENY = [os.environ.get("SystemRoot", r"C:\Windows"), r"C:\Program Files", r"C:\Program Files (x86)",
-         "/etc", "/sys", "/proc", "/boot", "/root", "/dev"]
+_WINDOWS_DENY = [os.environ.get("SystemRoot", r"C:\Windows"), r"C:\Program Files",
+                 r"C:\Program Files (x86)"]
+_POSIX_DENY = ["/etc", "/sys", "/proc", "/boot", "/root", "/dev"]
 
 
 def _path_ok(p):
     """Refuse registering a path that resolves into a system directory (path-traversal / sensitive-file
-    fingerprinting into a bundle). adversarial-05. Normal artifact paths (refs/, research/) pass."""
-    try:
-        ap = os.path.normcase(os.path.abspath(p))
-    except Exception:
-        return False
-    for d in _DENY:
+    fingerprinting into a bundle). Check both path syntaxes regardless of the host OS so a Windows path
+    cannot become an innocent-looking relative POSIX path in Linux CI (and vice versa). adversarial-05.
+    Normal artifact paths (refs/, research/) pass."""
+    for path_module, denied_roots in ((ntpath, _WINDOWS_DENY), (posixpath, _POSIX_DENY)):
         try:
-            dn = os.path.normcase(os.path.abspath(d))
-        except Exception:
-            continue
-        if ap == dn or ap.startswith(dn + os.sep):
+            ap = path_module.normcase(path_module.abspath(p))
+        except (AttributeError, TypeError, ValueError):
             return False
+        for denied_root in denied_roots:
+            try:
+                dn = path_module.normcase(path_module.abspath(denied_root))
+            except (AttributeError, TypeError, ValueError):
+                continue
+            if ap == dn or ap.startswith(dn.rstrip(path_module.sep) + path_module.sep):
+                return False
     return True
 
 

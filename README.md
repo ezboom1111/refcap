@@ -1,5 +1,9 @@
 # refcap — 콘텐츠 레퍼런스 & 멀티소스 리서치 척추
 
+[![CI](https://github.com/ezboom1111/refcap/actions/workflows/ci.yml/badge.svg)](https://github.com/ezboom1111/refcap/actions/workflows/ci.yml)
+[![Python 3.9+](https://img.shields.io/badge/Python-3.9%2B-3776AB?logo=python&logoColor=white)](#요구-사항)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](./LICENSE)
+
 > *refcap is a personal content-reference + multi-source research toolkit: an append-only,
 > cite-or-fail research ledger (stdlib-only Python) plus local media extraction (whisper ASR,
 > vocal separation, OCR, frame sampling) and a falsifiable-alpha hypothesis loop. It is a
@@ -10,6 +14,25 @@
 `leesearch` 스킬군(범용 리서치 라우트 테이블 · 알파 발굴 · 헤비 영상 분석)의
 로컬 실행 계층이며, 결론을 지탱하는 주장은 등록된 바이트에 앵커되지 않으면
 기록 자체가 거부됩니다(cite-or-fail).
+
+## 30초 요약
+
+| 질문 | 답 |
+| --- | --- |
+| 어떤 문제를 푸나? | 여러 소스와 긴 미디어를 조사할 때 출처·미해결 질문·판단 근거가 세션 사이에서 유실되는 문제 |
+| 무엇을 만들었나? | 표준 라이브러리만 쓰는 append-only 증거 원장, 재개 가능한 조사 frontier, 미디어 추출 파이프라인, 반증 가능한 가설·예측 루프 |
+| 무엇을 강제하나? | finding의 인용문이 등록된 바이트에 실제로 존재해야 하며, 원본이 바뀌면 SHA-256 재검증이 실패함 |
+| 무엇을 보장하지 않나? | 인용이 존재한다는 사실은 보장하지만 그 인용이나 결론이 참이라는 사실은 보장하지 않음 |
+| 어떻게 검증했나? | stdlib `unittest` 269개와 네 차례 적대적 QA 코퍼스를 저장소에 함께 공개 |
+
+가장 빠른 코드 검토 경로는 [`refledger.py`](./refledger.py) →
+[`test_refledger.py`](./test_refledger.py) →
+[`RESEARCH_RUNBOOK.md`](./RESEARCH_RUNBOOK.md) 순서입니다. 전체 자동 검증은 다음
+한 줄로 재현할 수 있습니다.
+
+```bash
+python -m unittest discover -p "test_*.py"
+```
 
 ## 핵심 입장: 두뇌는 에이전트, 코드는 척추
 

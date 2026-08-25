@@ -164,6 +164,7 @@ class S_Concurrency(unittest.TestCase):  # op-03: dedupe TOCTOU race (was: 20 th
 class S_PathSafety(unittest.TestCase):  # adversarial-05: path traversal into system files
     def test_path_ok_denies_system_dirs(self):
         self.assertFalse(R._path_ok(r"C:\Windows\win.ini"))
+        self.assertFalse(R._path_ok("C:/Windows/../Windows/System32/drivers/etc/hosts"))
         self.assertFalse(R._path_ok("/etc/passwd"))
         self.assertFalse(R._path_ok("/sys/kernel/x"))
         self.assertTrue(R._path_ok("refs/clip/transcript.txt"))   # normal artifact path is fine
