@@ -8,13 +8,14 @@ research path under the `leesearch` front-door.
 - **The loop is `RESEARCH_RUNBOOK.md`** (read it first): open → frontier → ingest → finding(anchored) →
   verify → plan(farm) → digest. The brain is YOU; `refledger.py` is the disk-bound spine that only
   persists nouns (artifact / finding / frontier-entry) and judges whether evidence is real.
-- **Skills** are authored canonically here: `SKILL.md` (root = `leesearch-video-heavy`) and `skills/`
-  (`leesearch`, `leesearch-alpha`, `leesearch-video-heavy`). Deployed copies live in `~/.claude/skills/`
-  (Claude Code) and `~/.codex/skills/` (Codex) — same `SKILL.md` format. (`leesearch-video-light` was
+- **Skills** are authored canonically here: `skills/` (`leesearch`, `leesearch-alpha`,
+  `leesearch-video-heavy`; the root `SKILL.md` copy was deleted 458009e — `skills/` is the only canon).
+  Deployed copies live in `~/.claude/skills/` (Claude Code) and `~/.codex/skills/` (Codex) — same
+  `SKILL.md` format. (`leesearch-video-light` was
   retired 2026-06-10 — it was a pure indirection layer; the light path is `youtube-research` directly.)
 - **Always use ascii slugs** for `refledger.py` — never pass a Korean absolute path as an arg (Windows
   mangles it): `SLUG=$(python refledger.py open "<goal>")` then use `$SLUG`.
-- **Tests**: `python -m unittest test_refledger test_scenarios` (42, stdlib only).
+- **Tests**: `python -m unittest discover -p "test_*.py"` (269 across 14 files, stdlib only; ~22s).
 - **Constraints**: sequential extractor subprocesses (15 GB OOM defense); don't-hoard (keep hashes, delete
   raw media); secrets env-only; no TikTok/IG auto-acquisition / cookies / anti-bot bypass (ToS);
   cite-or-fail proves anchoring, NOT transcript correctness.
