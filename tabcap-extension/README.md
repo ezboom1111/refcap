@@ -7,7 +7,7 @@ No upload, no network, no farm involvement. Personal utility, lives outside the 
 ## Install (one time)
 1. Chrome → `chrome://extensions`
 2. Toggle **Developer mode** (top-right) ON.
-3. **Load unpacked** → select this folder (`C:\Users\이지범\refcap\tabcap-extension`).
+3. **Load unpacked** → select this folder (`C:\Users\<user>\refcap\tabcap-extension`).
 4. Pin the **refcap tab recorder** icon (puzzle-piece menu → pin).
 
 ## Record one video
@@ -21,7 +21,7 @@ No upload, no network, no farm involvement. Personal utility, lives outside the 
 
 ## Analyze (existing pipeline, no new code)
 ```
-python refextract.py "C:\Users\이지범\Downloads\refcap-rec-<ts>.webm" "<note: niche, stats, why selected>"
+python refextract.py "C:\Users\<user>\Downloads\refcap-rec-<ts>.webm" "<note: niche, stats, why selected>"
 python colorprofile.py refs\<id>\frames
 ```
 → `frames/` (smart frames) + `transcript_timed.txt` (whisper VO) + `color.json`.

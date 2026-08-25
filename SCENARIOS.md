@@ -310,7 +310,7 @@
 - **operational_edge-05** [unstructured/unit/**covered**] 인코딩: finding의 --quote에 이모지 + 한자(漢字) + 반각가나(ｱ) + 한글이 섞인 verbatim 바이트가 들어온다. 이게 ledger/farm_plan.json까지 라운드트립한다.
   - 기대: OK. ensure_ascii=False + utf-8 일관 사용으로 멀티바이트/이모지 보존. farm_plan.json blob에 quote가 바이트 그대로 남아 farm cite-or-fail 앵커(quote∈bytes)가 성립.
   - 검증: 실측 확인됨(EMOJI_PRESERVED_IN_PLAN True): quote='진짜 🎉 漢字 ｱ' record_finding 후 farm_plan.json에 그대로 존재. 전용 이모지/CJK 테스트는 없으나 동작 covered(한글만 테스트됨).
-- **operational_edge-06** [structured/unit/**partial**] 한글 경로 + cwd-상대 함정: 에이전트가 실수로 한글 절대경로(C:\Users\이지범\...)를 CLI rdir 인자로 넘긴다(슬러그 대신). Windows 서브프로세스 arg 인코딩이 깨질 수 있는 정확한 seam.
+- **operational_edge-06** [structured/unit/**partial**] 한글 경로 + cwd-상대 함정: 에이전트가 실수로 한글 절대경로(C:\Users\<user>\...)를 CLI rdir 인자로 넘긴다(슬러그 대신). Windows 서브프로세스 arg 인코딩이 깨질 수 있는 정확한 seam.
   - 기대: _resolve가 abs/sep/'/' 포함 시 그대로 통과시키고, ascii 슬러그만 HERE/research/<slug>로 해석. open_research가 sha256 ascii 슬러그 leaf를 강제해 한글 디렉터리 leaf를 애초에 안 만듦으로써 farm/Windows 경로 안전. RUNBOOK이 '슬러그로만 호출'을 명시.
   - 검증: leaf ascii는 test_open_research_ascii_safe_dir로 covered. 그러나 '한글 abs path를 _resolve에 넘겼을 때'의 Windows subprocess arg 깨짐은 단위테스트로 재현 안 됨(플랫폼 의존) = partial.
 - **operational_edge-07** [semi/unit/**gap**] 네트워크 timeout/실패: ingest(html/json)에서 _http_get가 30초 timeout 또는 연결거부/DNS실패로 예외. 또는 video ingest의 refextract 서브프로세스가 900초 timeout.
