@@ -8,6 +8,17 @@
 # exceptions, stopping on `suspect`) is OPEN work — see reports/codex-review3.md. Do not claim
 # "enforced" until refledger.ingest (or the public entrypoint) is routed through it.
 #
+# P0-2 DECISION (2026-09-01, Claude+Codex competitive review, reports/p0-2-synthesis.md): BUILD-LATER.
+# Both agents rejected build-now; the reproduced gap is that refledger.farm_plan() promotes a
+# receipt-less remote artifact to farm claims with only a text WARN (no opt-out/receipt/softblock/
+# validation gate). Enforcement, WHEN triggered, goes at farm_plan()'s call emission (a receipt for the
+# controlled path, a typed waiver for native/BYO), NOT inside ingest() — its depth-0 router canon stays.
+# Activation triggers (any one): (1) a T2 external/legal/dispute bundle must claim "safe/opt-out-checked
+# acquisition"; (2) unattended/scheduled/multi-user remote acquisition reaches production; (3) any real
+# incident where a receipt-less / unknown / suspect / opt-out-violating artifact drove a decision;
+# (4) refledger plan becomes the SOLE blessed seal front-door (direct farm calls closed by policy/test);
+# (5) refacquire.acquire() gains its first production caller. Until then: advisory + P0-1 regression in CI.
+#
 # When used, this module is the single entrypoint that orders, fail-visible, so a routed caller's
 # wrong result cannot be promoted past a gate:
 #
