@@ -4,6 +4,11 @@
 Scans all SKILL.md files under skills/, checks last_verified date, warns if older than TTL.
 Exits 0 = all fresh, 1 = stale skills found.
 
+--fix stamps last_verified=today WITHOUT verifying content. To keep that from silently aging into
+a real-looking "fresh", it also persists `verified_by: date-stamp-unverified` in the frontmatter;
+later runs then report those skills as `stamped-unverified` (not `fresh`) until a human re-verifies
+the content and sets `verified_by: <how>` (or removes the marker).
+
 Usage:
     python check_skill_staleness.py                    # default 30-day TTL
     python check_skill_staleness.py --ttl 14           # 14-day TTL
@@ -33,23 +38,26 @@ def _parse_frontmatter(path):
     return fm, content
 
 
-def _update_last_verified(path, today_str):
+def _set_fm_field(fm_body, field, value):
+    if re.search(rf"(?m)^{re.escape(field)}:.*$", fm_body):
+        return re.sub(rf"(?m)^{re.escape(field)}:.*$", f"{field}: {value}", fm_body, count=1)
+    return fm_body + f"\n{field}: {value}"
+
+
+def _update_last_verified(path, today_str, verified_by="date-stamp-unverified"):
+    """Stamp last_verified AND persist `verified_by` provenance. A bare --fix writes
+    `verified_by: date-stamp-unverified`, so the NEXT run can tell an unverified date stamp from a
+    real verification (Codex 3rd/4th review: the false-green must not survive silently)."""
     with open(path, "r", encoding="utf-8") as f:
         content = f.read()
-    # Operate ONLY inside the frontmatter block (first `---\n ... \n---`). A whole-file regex would (a) match a
-    # literal `last_verified:` line in the markdown BODY before the frontmatter and rewrite that instead (leaving
-    # the skill permanently 'missing'), and (b) its `\s*\S+` form once ate the closing `---`. Line-anchored within
-    # the block, the value is rewritten to end-of-line (never crossing the newline / delimiter).
+    # Operate ONLY inside the frontmatter block (first `---\n ... \n---`) — see history note below.
     m = re.match(r"(?s)^(---\s*\n)(.*?)(\n---)", content)
     if not m:
-        # No frontmatter block — create one (defensive; real SKILL.md files always have frontmatter).
-        new = f"---\nlast_verified: {today_str}\n---\n\n" + content
+        new = f"---\nlast_verified: {today_str}\nverified_by: {verified_by}\n---\n\n" + content
     else:
         head, fm_body, tail = m.group(1), m.group(2), m.group(3)
-        if re.search(r"(?m)^last_verified:.*$", fm_body):
-            fm_body = re.sub(r"(?m)^last_verified:.*$", f"last_verified: {today_str}", fm_body, count=1)
-        else:
-            fm_body = fm_body + f"\nlast_verified: {today_str}"
+        fm_body = _set_fm_field(fm_body, "last_verified", today_str)
+        fm_body = _set_fm_field(fm_body, "verified_by", verified_by)
         new = head + fm_body + tail + content[m.end():]
     with open(path, "w", encoding="utf-8") as f:
         f.write(new)
@@ -77,7 +85,15 @@ def check_staleness(ttl_days=DEFAULT_TTL_DAYS, fix=False):
                 age_days = (today - lv_date).days
                 # "Max days since last_verified" → reaching the TTL (age == ttl) IS stale, not just exceeding it.
                 stale = age_days >= ttl_days
-                status = "stale" if stale else "fresh"
+                if stale:
+                    status = "stale"
+                elif fm.get("verified_by", "").strip("'\"") == "date-stamp-unverified":
+                    # Within TTL, but the date was written by a bare --fix (no content check). Report this
+                    # distinctly and PERSISTENTLY (the marker lives in the frontmatter), so a later run — and
+                    # any reader — can tell an unverified stamp from a real verification. Not "fresh".
+                    status = "stamped-unverified"
+                else:
+                    status = "fresh"
             except ValueError:
                 status = "invalid-date"
                 age_days = None
@@ -101,9 +117,15 @@ def check_staleness(ttl_days=DEFAULT_TTL_DAYS, fix=False):
     out = {"pass": not has_stale, "ttl_days": ttl_days, "checked": today_str, "skills": results}
     stamped = [r["skill"] for r in results if r["status"] == "fixed"]
     if stamped:
-        # A date-only stamp with NO content re-verification. Surfaced so a green result
-        # produced by --fix is never mistaken for a verified-fresh result (false green).
+        # A date-only stamp with NO content re-verification, applied in THIS run. Surfaced so a green
+        # result produced by --fix is never mistaken for a verified-fresh result (false green).
         out["unverified_datestamp"] = stamped
+    # PERSISTENT provenance: skills whose date was previously written by --fix (never content-verified).
+    # Unlike unverified_datestamp (this-run-only), this survives across runs via the frontmatter marker,
+    # so the false-green cannot silently age into looking verified.
+    persisted = [r["skill"] for r in results if r["status"] == "stamped-unverified"]
+    if persisted:
+        out["stamped_unverified"] = persisted
     return out
 
 
@@ -129,7 +151,8 @@ def main():
         print(json.dumps(result, ensure_ascii=False, indent=2))
     else:
         for s in result["skills"]:
-            icon = {"fresh": "OK", "stale": "STALE", "missing": "NO-DATE", "invalid-date": "BAD-DATE", "fixed": "DATE-ONLY(UNVERIFIED)"}
+            icon = {"fresh": "OK", "stale": "STALE", "missing": "NO-DATE", "invalid-date": "BAD-DATE",
+                    "fixed": "DATE-ONLY(UNVERIFIED)", "stamped-unverified": "STAMPED(UNVERIFIED)"}
             age_str = f"{s['age_days']}d" if s["age_days"] is not None else "?"
             print(f"  [{icon.get(s['status'], '?')}] {s['skill']:30s} verified={s['last_verified'] or 'NONE':12s} age={age_str}")
         status = "ALL FRESH" if result["pass"] else "STALE SKILLS FOUND"
@@ -138,6 +161,11 @@ def main():
         print("WARNING: date-only stamp (no verification) applied to: "
               f"{', '.join(result['unverified_datestamp'])}. 'fresh' here means 'date rewritten', "
               "not 'content re-verified'.", file=sys.stderr)
+    if result.get("stamped_unverified"):
+        print("WARNING: these skills carry a persisted date-stamp-unverified marker (a prior --fix "
+              f"stamped the date but never verified content): {', '.join(result['stamped_unverified'])}. "
+              "Re-verify the content, then set 'verified_by: <how>' (or remove it) in the frontmatter.",
+              file=sys.stderr)
     sys.exit(0 if result["pass"] else 1)
 
 

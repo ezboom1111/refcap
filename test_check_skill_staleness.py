@@ -112,7 +112,8 @@ class Staleness(unittest.TestCase):
             f.write("---\nname: bodybug\n---\n\n# Notes\nlast_verified: was checked 2020-01-01\n")
         SS.check_staleness(ttl_days=30, fix=True)
         res = SS.check_staleness(ttl_days=30)
-        self.assertEqual(res["skills"][0]["status"], "fresh")   # frontmatter got the key, not the body
+        # frontmatter got the key (not the body); a --fix stamp reads back as stamped-unverified, not fresh
+        self.assertEqual(res["skills"][0]["status"], "stamped-unverified")
         with open(p, encoding="utf-8") as f:
             content = f.read()
         self.assertIn("last_verified: was checked 2020-01-01", content)   # body line untouched
@@ -158,6 +159,48 @@ class Staleness(unittest.TestCase):
         self._skill("marked", (self._today() - timedelta(days=99)).isoformat())
         res = SS.check_staleness(ttl_days=30, fix=True)
         self.assertIn("marked", res.get("unverified_datestamp", []))
+
+    # --- provenance persistence (Codex 3rd/4th review: a --fix stamp must NOT silently look verified) ---
+
+    def _skill_verified_by(self, name, last_verified, verified_by):
+        d = os.path.join(self.skills, name)
+        os.makedirs(d, exist_ok=True)
+        with open(os.path.join(d, "SKILL.md"), "w", encoding="utf-8") as f:
+            f.write(f"---\nname: {name}\nlast_verified: {last_verified}\n"
+                    f"verified_by: {verified_by}\n---\n\n# {name}\nbody\n")
+
+    def test_fix_persists_verified_by_marker(self):   # the marker is written to the frontmatter
+        self._skill("persist", (self._today() - timedelta(days=99)).isoformat())
+        SS.check_staleness(ttl_days=30, fix=True)
+        fm, _ = SS._parse_frontmatter(os.path.join(self.skills, "persist", "SKILL.md"))
+        self.assertEqual(fm.get("verified_by"), "date-stamp-unverified")
+
+    def test_stamped_skill_reports_stamped_unverified_not_fresh(self):   # within TTL but only date-stamped
+        self._skill_verified_by("st", self._today().isoformat(), "date-stamp-unverified")
+        res = SS.check_staleness(ttl_days=30)
+        self.assertEqual(res["skills"][0]["status"], "stamped-unverified")
+        self.assertIn("st", res.get("stamped_unverified", []))
+        self.assertTrue(res["pass"])   # acknowledged stamp does not FAIL the gate — but is loudly, persistently flagged
+
+    def test_stamped_unverified_survives_repeated_runs(self):   # the core Codex requirement: does not age into "fresh"
+        self._skill("age", (self._today() - timedelta(days=99)).isoformat())
+        SS.check_staleness(ttl_days=30, fix=True)          # stamp it
+        for _ in range(3):                                  # every later run still sees it as unverified
+            res = SS.check_staleness(ttl_days=30)
+            self.assertEqual(res["skills"][0]["status"], "stamped-unverified")
+            self.assertIn("age", res.get("stamped_unverified", []))
+
+    def test_real_verification_marker_reads_fresh(self):   # a human re-verify (verified_by != date-stamp-unverified) is fresh
+        self._skill_verified_by("real", self._today().isoformat(), "manual")
+        res = SS.check_staleness(ttl_days=30)
+        self.assertEqual(res["skills"][0]["status"], "fresh")
+        self.assertNotIn("stamped_unverified", res)
+
+    def test_stale_takes_precedence_over_stamp_marker(self):   # an old stamped skill is STALE, not merely stamped
+        self._skill_verified_by("old", (self._today() - timedelta(days=99)).isoformat(), "date-stamp-unverified")
+        res = SS.check_staleness(ttl_days=30)
+        self.assertEqual(res["skills"][0]["status"], "stale")
+        self.assertFalse(res["pass"])
 
 
 if __name__ == "__main__":
