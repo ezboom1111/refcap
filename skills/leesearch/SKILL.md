@@ -220,6 +220,11 @@ Prefer visible evidence states and short sufficiency labels.
 아래 표) → **②insane-search 엔진**(unknown/harder 벽: 위장그리드+WAF프로파일+per-host 학습) → **③**`curl_cffi`
 단발 → crawl4ai/farm headed → profile/byo.
 
+> **이음매 — 자동/동의 경계선**(성격이 바뀌는 한 지점): **①②③+crawl4ai**까지는 "데이터가 어디 있나"를
+> 찾는 단계라 **자동 진행**한다(사이트가 나를 막은 게 아니라 데이터 위치가 다를 뿐). `profile`·`byo_capture`·
+> headed 로그인은 **"상대가 나를 식별·거절한"** 뒤의 단계다 — 이 경계를 넘을 때만 사용자 동의/판단을 받고,
+> 자율 봇·CAPTCHA 우회는 넘어서도 금지(lawful-refusal). 통지는 "도메인당 한 번"이 아니라 이 경계를 넘을 때다.
+
 - **insane-search 엔진 (vendored engine-only, 감사 2026-07-07 통과)**: `refcap/vendor/insane-search/`에서
   `python -m engine <URL> [--json] [--device mobile] [--trace]`. SSRF가드+프롬프트인젝션탐지+로컬학습 내장,
   플러그인 껍데기(phone-home·config주입)는 **의도적 제외**. **사각지대(실측)**: url_transforms가 `www.X→m.X`·apex만이라
@@ -294,6 +299,9 @@ run T2 ceremony on a T0 question.
   anti-bot/로그인 소스는 `headed_only` — farm은 자율로 뚫지 않는다 (lawful-refusal, 설계).
   **http_fetch가 403/빈껍데기면 멈추지 마라** → `profile`(동의된 로그인 세션) 또는 `byo_capture`
   (네가 실브라우저로 캡처, farm이 바이트 검증). 자율 봇/CAPTCHA 우회 금지.
+- **네이버 공식 API 상태**: 검색(블로그·뉴스·카페·지식iN) API는 유지되나 **쇼핑·책·전문자료
+  코퍼스는 종료**(2026 API HUB 이전) — 가격비교를 공식 API로 뽑으려 시간 낭비 말 것. 현재 상태·날짜는
+  `facts.registry.md` F-002가 최신(플랫폼 정책은 시효 있음).
 - **리뷰 조사**: 벽 낮은 소스부터 — 앱스토어 리뷰(공식 API), 커머스 리뷰, 무로그인 커뮤니티,
   지도 리뷰, 유튜브 리뷰영상(→heavy). ⚠️ 네이버 PLACE: farm `naver_place_apollo`는 Place
   **엔트리(목적지) 추출기**이지 리뷰 본문 추출기가 아니며, 감사 실측(2026-07-20) 결과 프로덕션
