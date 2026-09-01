@@ -198,10 +198,11 @@ Prefer visible evidence states and short sufficiency labels.
 
 ### 로컬 근육 인벤토리 (dev PC 실측 2026-07-07 — 여기 없는 설치도구는 호스트가 놓친다, 설치/제거 시 이 표를 갱신)
 
-> ⚠ **시효 있는 사실은 `facts.registry.md`에 산다**(도구 버전·플랫폼 API 정책·스텔스 티어 건강 —
-> 레코드별 날짜·TTL). 이 표는 "무엇을 왜 쓰나"(method)만 담는다. 버전 숫자·정책 날짜는 registry가
-> 최신이며, registry와 본문이 어긋나면 registry를 따른다. (스텔스 티어 건강: curl_cffi·patchright·
-> nodriver=healthy / camoufox·FlareSolverr=degraded / puppeteer-stealth=dead — registry 참조.)
+> ⚠ **시효 있는 사실은 registry에 산다**(도구 버전·플랫폼 API 정책·스텔스 티어 건강 — 레코드별 TTL):
+> 기계 소스 `facts.registry.json` + loader `refcap/reffreshness.py`(만료/미발효/미검증/손상 판정, stale를
+> fresh로 재라벨 안 함), 사람용 뷰 `facts.registry.md`. 이 표는 "무엇을 왜 쓰나"(method)만 담고,
+> 버전 숫자·정책 날짜가 어긋나면 registry가 최신이다. (스텔스 티어: curl_cffi·patchright·nodriver=healthy /
+> camoufox·FlareSolverr=degraded / puppeteer-stealth=dead — registry 참조.)
 
 | Need | 근육 (전부 설치·스모크 통과) |
 |---|---|

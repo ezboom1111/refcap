@@ -59,11 +59,21 @@ class SkillContract(unittest.TestCase):
 
     def test_referenced_entrypoints_importable(self):
         sys.path.insert(0, HERE)
-        import refopt, refguard, refacquire
+        import refopt, refguard, refacquire, reffreshness
         self.assertTrue(hasattr(refopt, "resolve_optout"))
         self.assertTrue(hasattr(refguard, "detect_softblock"))
         self.assertTrue(hasattr(refguard, "validate_values"))
         self.assertTrue(hasattr(refacquire, "acquire"))     # pipeline entrypoint exists
+        self.assertTrue(hasattr(reffreshness, "load_registry"))
+
+    def test_machine_registry_loads_clean(self):
+        # the typed registry the loader reads must exist and validate (not just the .md prose)
+        sys.path.insert(0, HERE)
+        import reffreshness
+        self.assertTrue(os.path.exists(os.path.join(HERE, "skills", "leesearch", "facts.registry.json")))
+        recs, issues = reffreshness.load_registry()
+        self.assertEqual(issues, [], f"facts.registry.json must be valid: {issues}")
+        self.assertTrue(len(recs) >= 10)
 
     # --- registry structure ----------------------------------------------
     def test_registry_has_status_vocab_and_facts(self):

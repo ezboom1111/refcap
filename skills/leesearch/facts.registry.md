@@ -4,6 +4,11 @@
 > 도구 버전·플랫폼 API 정책·스텔스 티어 건강처럼 몇 주면 썩는 것들. 각 레코드는 자기 날짜·TTL·status를
 > 가진다(파일 전체 `last_verified` 하나로는 서로 다른 TTL을 만료 못 시킨다 — Codex 리뷰 2026-09-01).
 >
+> **⚙ 기계 소스는 `facts.registry.json`이다(이 .md는 사람용 뷰).** loader `refcap/reffreshness.py`가
+> 레코드별로 `fresh|stale|pending|unverified|corrupt`를 판정하며 **stale를 fresh로 재라벨하지 않는다**.
+> `refacquire.acquire(registry_check=reffreshness.registry_check)`로 배선되면 stale/pending/미검증
+> 사실이 수집 결과에 경고로 표면화된다. (`python reffreshness.py`로 현재 판정 표를 볼 수 있다.)
+>
 > **status**: `observed`(직접 관측) · `announced`(발표됨, 미발효) · `effective`(발효/시행 중) ·
 > `degraded`/`dead`(도구 상태) · `partially-verified` · `unverified`(스킬 hard-code 금지).
 > **읽는 법(에이전트=소비자)**: 라우팅 판단 전에 관련 레코드를 보라. `effective_at`가 미래면 "예고"로만
