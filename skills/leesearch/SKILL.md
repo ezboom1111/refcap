@@ -304,6 +304,9 @@ run T2 ceremony on a T0 question.
   `allowed | disallowed | conditional | unknown`으로 명시하라(fail-visible — 못 읽으면 "allowed" 아님).
   EU는 opt-out 신호를 놓치고 수집하면 저작권 예외가 소멸한다(GPAI 의무). ⚠️ `llms.txt`(비표준)를 법적
   opt-out으로 취급 금지 — 공식 RSL과 구분. RSL 세부 어휘·검증 상태는 `facts.registry.md` F-003.
+  **구현**: `refcap/refopt.py` `resolve_optout(url, fetch)` — robots(path+query·UA그룹·Allow오버라이드·
+  `*`/`$`)·RSL `License:`·TDMRep·noai를 `allowed|disallowed|conditional|unknown`으로 해석(fail-visible,
+  네트워크 주입, 테스트 20). 라이선스 XML 본문 파싱은 스펙 확인 후(F-003) — 지금은 license_urls만 노출.
 - **네이버 공식 API 상태**: 검색(블로그·뉴스·카페·지식iN) API는 유지되나 **쇼핑·책·전문자료
   코퍼스는 종료**(2026 API HUB 이전) — 가격비교를 공식 API로 뽑으려 시간 낭비 말 것. 현재 상태·날짜는
   `facts.registry.md` F-002가 최신(플랫폼 정책은 시효 있음).
