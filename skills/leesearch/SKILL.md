@@ -15,7 +15,7 @@ description: >-
 when_to_use: >-
   Research where the output feeds a real decision, document, or dispute — i.e. it needs cited,
   hash-verifiable evidence or a resumable ledger. For throwaway questions, skip this and answer natively.
-last_verified: 2026-07-20
+last_verified: 2026-09-01
 ---
 
 # leesearch — route table (not a router)
@@ -198,6 +198,11 @@ Prefer visible evidence states and short sufficiency labels.
 
 ### 로컬 근육 인벤토리 (dev PC 실측 2026-07-07 — 여기 없는 설치도구는 호스트가 놓친다, 설치/제거 시 이 표를 갱신)
 
+> ⚠ **시효 있는 사실은 `facts.registry.md`에 산다**(도구 버전·플랫폼 API 정책·스텔스 티어 건강 —
+> 레코드별 날짜·TTL). 이 표는 "무엇을 왜 쓰나"(method)만 담는다. 버전 숫자·정책 날짜는 registry가
+> 최신이며, registry와 본문이 어긋나면 registry를 따른다. (스텔스 티어 건강: curl_cffi·patchright·
+> nodriver=healthy / camoufox·FlareSolverr=degraded / puppeteer-stealth=dead — registry 참조.)
+
 | Need | 근육 (전부 설치·스모크 통과) |
 |---|---|
 | 기사/블로그 본문 정제 (html→본문 텍스트) | `trafilatura.extract(html)` |
@@ -205,7 +210,7 @@ Prefer visible evidence states and short sufficiency labels.
 | RSS/Atom 수신·파싱 | `feedparser` |
 | PDF/DOCX/PPTX/XLSX → 마크다운 (표·스캔) | `docling` DocumentConverter |
 | 소셜 이미지 갤러리+메타 대량 | `gallery-dl` (공개=무로그인; 심화=버너쿠키+저속, 계정리스크) |
-| 영상/오디오/자막/메타 다운로드 | `yt-dlp` (2026.07.04 — TikTok 공개영상 무로그인 확정경로) |
+| 영상/오디오/자막/메타 다운로드 | `yt-dlp` (TikTok 공개영상 무로그인 확정경로 · 실 JS런타임 필요 — 버전·런타임은 `facts.registry.md`) |
 | 이미지/프레임 OCR **한국어** | `rapidocr_onnxruntime` RapidOCR — easyocr 대신 쓸 것(한국어 CER 약함) |
 | TLS 지문 403 돌파 | `curl_cffi` — ⚠ 한글 사용자명 PC는 CA 경로 버그: `CURL_CA_BUNDLE=C:/Users/Public/cacert.pem` 지정 필요 |
 | 무인 브라우저 CLI (모델 불문, a11y-tree 텍스트) | `agent-browser` 0.31.1 — 데몬 미다운로드(24/7 소비자 생기면 `agent-browser install`) |
