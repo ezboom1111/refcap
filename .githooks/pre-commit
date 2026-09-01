@@ -33,7 +33,7 @@ if [ -n "$CORE_CHANGED" ]; then
   if python check_skill_staleness.py --ttl 30 >/dev/null 2>&1; then
     echo "[pre-commit] All skills fresh."
   else
-    echo "[pre-commit] WARNING: stale skill docs. Run: python check_skill_staleness.py --fix"
+    echo "[pre-commit] WARNING: stale skill docs. Re-verify the skill content, then stamp the date: python check_skill_staleness.py --fix --yes-unverified  (date-only; does NOT verify content)"
   fi
 fi
 

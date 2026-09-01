@@ -3,6 +3,7 @@ Isolated by monkeypatching the module SKILLS_DIR to a temp tree. stdlib only.
 Run: python -m unittest test_check_skill_staleness -v
 """
 import os, sys, tempfile, shutil, unittest
+from unittest import mock
 from datetime import datetime, timedelta, timezone
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import check_skill_staleness as SS
@@ -133,6 +134,30 @@ class Staleness(unittest.TestCase):
         self.assertIn("description: >-", content)               # folded block intact
         self.assertIn("  line one", content)
         self.assertIn("  line two", content)
+
+
+    def test_cli_fix_requires_ack(self):   # false-green guard: bare --fix is refused at the CLI
+        self._skill("gated", (self._today() - timedelta(days=99)).isoformat())
+        with mock.patch.object(sys, "argv", ["check_skill_staleness.py", "--fix"]):
+            with self.assertRaises(SystemExit) as cm:
+                SS.main()
+        self.assertNotEqual(cm.exception.code, 0)   # argparse.error exits non-zero
+        res = SS.check_staleness(ttl_days=30)         # and the skill was NOT stamped
+        self.assertEqual(res["skills"][0]["status"], "stale")
+
+    def test_cli_fix_with_ack_stamps_and_flags_unverified(self):   # explicit unsafe path works + is flagged
+        self._skill("acked", (self._today() - timedelta(days=99)).isoformat())
+        with mock.patch.object(sys, "argv", ["check_skill_staleness.py", "--fix", "--yes-unverified", "--json"]):
+            with self.assertRaises(SystemExit):
+                SS.main()
+        res = SS.check_staleness(ttl_days=30)
+        self.assertTrue(res["pass"])                                       # date got stamped
+        self.assertEqual(res["skills"][0]["last_verified"], self._today().isoformat())
+
+    def test_check_staleness_flags_unverified_datestamp(self):   # the false-green marker is surfaced
+        self._skill("marked", (self._today() - timedelta(days=99)).isoformat())
+        res = SS.check_staleness(ttl_days=30, fix=True)
+        self.assertIn("marked", res.get("unverified_datestamp", []))
 
 
 if __name__ == "__main__":

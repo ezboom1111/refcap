@@ -8,7 +8,7 @@ Usage:
     python check_skill_staleness.py                    # default 30-day TTL
     python check_skill_staleness.py --ttl 14           # 14-day TTL
     python check_skill_staleness.py --json
-    python check_skill_staleness.py --fix              # update last_verified to today
+    python check_skill_staleness.py --fix --yes-unverified   # date-only stamp (NO content check; false-green risk)
 """
 import os, sys, json, argparse, re, glob
 from datetime import datetime, timezone
@@ -98,26 +98,46 @@ def check_staleness(ttl_days=DEFAULT_TTL_DAYS, fix=False):
         })
 
     has_stale = any(r["status"] in ("stale", "missing", "invalid-date") for r in results)
-    return {"pass": not has_stale, "ttl_days": ttl_days, "checked": today_str, "skills": results}
+    out = {"pass": not has_stale, "ttl_days": ttl_days, "checked": today_str, "skills": results}
+    stamped = [r["skill"] for r in results if r["status"] == "fixed"]
+    if stamped:
+        # A date-only stamp with NO content re-verification. Surfaced so a green result
+        # produced by --fix is never mistaken for a verified-fresh result (false green).
+        out["unverified_datestamp"] = stamped
+    return out
 
 
 def main():
     parser = argparse.ArgumentParser(description="Check skill SKILL.md staleness")
     parser.add_argument("--ttl", type=int, default=DEFAULT_TTL_DAYS, help="Max days since last_verified")
     parser.add_argument("--json", action="store_true", help="JSON output")
-    parser.add_argument("--fix", action="store_true", help="Update last_verified to today for stale skills")
+    parser.add_argument("--fix", action="store_true",
+                        help="Stamp last_verified=today. This does NOT verify content — it only rewrites the "
+                             "date, which can create a green with zero re-measurement. Requires --yes-unverified.")
+    parser.add_argument("--yes-unverified", action="store_true",
+                        help="Acknowledge that --fix is a date-only stamp with no content verification.")
     args = parser.parse_args()
+
+    # False-green guard: --fix rewrites the date without re-verifying anything, so a bare --fix
+    # would silently turn a stale skill green. Require an explicit unsafe acknowledgment.
+    if args.fix and not args.yes_unverified:
+        parser.error("--fix only stamps last_verified=today WITHOUT re-verifying the skill (false-green risk). "
+                     "Re-verify the skill content yourself, then pass --fix --yes-unverified to stamp the date.")
 
     result = check_staleness(args.ttl, args.fix)
     if args.json:
         print(json.dumps(result, ensure_ascii=False, indent=2))
     else:
         for s in result["skills"]:
-            icon = {"fresh": "OK", "stale": "STALE", "missing": "NO-DATE", "invalid-date": "BAD-DATE", "fixed": "FIXED"}
+            icon = {"fresh": "OK", "stale": "STALE", "missing": "NO-DATE", "invalid-date": "BAD-DATE", "fixed": "DATE-ONLY(UNVERIFIED)"}
             age_str = f"{s['age_days']}d" if s["age_days"] is not None else "?"
             print(f"  [{icon.get(s['status'], '?')}] {s['skill']:30s} verified={s['last_verified'] or 'NONE':12s} age={age_str}")
         status = "ALL FRESH" if result["pass"] else "STALE SKILLS FOUND"
         print(f"\n[{status}] ttl={args.ttl}d checked={result['checked']}")
+    if result.get("unverified_datestamp"):
+        print("WARNING: date-only stamp (no verification) applied to: "
+              f"{', '.join(result['unverified_datestamp'])}. 'fresh' here means 'date rewritten', "
+              "not 'content re-verified'.", file=sys.stderr)
     sys.exit(0 if result["pass"] else 1)
 
 
