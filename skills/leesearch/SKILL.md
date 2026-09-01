@@ -299,6 +299,11 @@ run T2 ceremony on a T0 question.
   anti-bot/로그인 소스는 `headed_only` — farm은 자율로 뚫지 않는다 (lawful-refusal, 설계).
   **http_fetch가 403/빈껍데기면 멈추지 마라** → `profile`(동의된 로그인 세션) 또는 `byo_capture`
   (네가 실브라우저로 캡처, farm이 바이트 검증). 자율 봇/CAPTCHA 우회 금지.
+- **Opt-out 신호(수집 전, agent 행동 규칙 — 코드 아님)**: robots.txt만 보지 말고 `License:` 지시자
+  (RSL — 외부 XML URL을 가리키고 실제 조건은 그 XML에 있음)·TDMRep·`noai`류 메타도 함께 보라. 상태를
+  `allowed | disallowed | conditional | unknown`으로 명시하라(fail-visible — 못 읽으면 "allowed" 아님).
+  EU는 opt-out 신호를 놓치고 수집하면 저작권 예외가 소멸한다(GPAI 의무). ⚠️ `llms.txt`(비표준)를 법적
+  opt-out으로 취급 금지 — 공식 RSL과 구분. RSL 세부 어휘·검증 상태는 `facts.registry.md` F-003.
 - **네이버 공식 API 상태**: 검색(블로그·뉴스·카페·지식iN) API는 유지되나 **쇼핑·책·전문자료
   코퍼스는 종료**(2026 API HUB 이전) — 가격비교를 공식 API로 뽑으려 시간 낭비 말 것. 현재 상태·날짜는
   `facts.registry.md` F-002가 최신(플랫폼 정책은 시효 있음).
