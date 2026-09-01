@@ -1,8 +1,9 @@
 # leesearch — facts.registry (시효 있는 사실, 레코드별 TTL)
 
-> **SKILL.md는 METHOD(시효 없음: 라우팅·사다리·에스컬레이션)만 담는다. 시효 있는 사실은 여기 산다.**
-> 도구 버전·플랫폼 API 정책·스텔스 티어 건강처럼 몇 주면 썩는 것들. 각 레코드는 자기 날짜·TTL·status를
-> 가진다(파일 전체 `last_verified` 하나로는 서로 다른 TTL을 만료 못 시킨다 — Codex 리뷰 2026-09-01).
+> **경계**: SKILL.md는 METHOD(라우팅·사다리·에스컬레이션)와 *그 방법을 정당화하는 측정 근거*를 담고,
+> **볼라틸 운영 사실**(도구 버전·플랫폼 API 정책·스텔스 티어 건강처럼 몇 주면 썩고 라우팅을 좌우하는 것)은
+> 여기 산다. 각 레코드는 자기 날짜·TTL·status를 가진다(파일 전체 `last_verified` 하나로는 서로 다른 TTL을
+> 만료 못 시킨다 — Codex 리뷰 2026-09-01). SKILL은 "METHOD only"가 아니라 "볼라틸 운영 사실 없음"이다.
 >
 > **⚙ 기계 소스는 `facts.registry.json`이다(이 .md는 사람용 뷰).** loader `refcap/reffreshness.py`가
 > 레코드별로 `fresh|stale|pending|unverified|corrupt`를 판정하며 **stale를 fresh로 재라벨하지 않는다**.
