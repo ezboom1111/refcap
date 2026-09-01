@@ -309,9 +309,11 @@ run T2 ceremony on a T0 question.
   UA product-token·Allow오버라이드·`*`/`$`)·RSL `License:`·TDMRep·noai를 `allowed|disallowed|
   conditional|unknown`으로 해석(fail-visible: 로그인HTML·403·5xx=unknown, 404=allow-all; 테스트 23).
   라이선스 XML 본문 파싱은 스펙 확인 후(F-003) — 지금은 license_urls만 노출.
-  **강제 배선**: `refcap/refacquire.py acquire()`가 optout→fetch→softblock→parse→validate를 순서대로
-  STOP-게이트로 강제한다(disallowed/unknown=fetch 금지, conditional=동의 게이트). helper를 직접
-  부르지 말고 이 진입점을 통해라 — 그래야 게이트가 실제로 걸린다.
+  **배선 상태 (정직)**: `refcap/refacquire.py acquire()`가 optout→fetch→softblock→parse→validate를
+  STOP-게이트로 묶어 두었으나 — **아직 production path 강제가 아니다**. 실제 `refledger.ingest()`는
+  `_http_get`으로 직접 fetch하며 이 facade를 우회한다(Codex 3차 리뷰 2026-09-01 실측). 그러므로 이건
+  **advisory 헬퍼**다: 네가(에이전트) 수집을 통제할 때 이 순서로 부르면 게이트가 걸리지만, 자동 강제는
+  아니다. 실제 강제 배선(refledger.ingest→gateway)은 열린 작업(reports/codex-review3.md).
 - **네이버 공식 API 상태**: 검색(블로그·뉴스·카페·지식iN) API는 유지되나 **쇼핑·책·전문자료
   코퍼스는 종료**(2026 API HUB 이전) — 가격비교를 공식 API로 뽑으려 시간 낭비 말 것. 현재 상태·날짜는
   `facts.registry.md` F-002가 최신(플랫폼 정책은 시효 있음).
@@ -347,9 +349,10 @@ run T2 ceremony on a T0 question.
   Akamai 미통과를 판별하되 **selector가 hit하면 마커가 있어도 콘텐츠로 취급**(정상 기사 오탐 제거),
   HTTP 4xx/5xx는 `http_error`로 anti-bot과 분리, JS-wall은 렌더 승격으로 분리. `validate_values`는
   type/range/empty/**non-finite(NaN)**/uniform/`unique`/min_rows + reject_regex(**known-junk 데닐리스트 —
-  wrong-target 증명이 아님**) 검사, non-throwing. 이 순서를 강제하는 진입점은 `refcap/refacquire.py
-  acquire()`(blocked=parse 금지, validation issue=미승격, 각 STOP은 `evidence_state`로 명시). 자가치유·
-  greedy 셀렉터는 늘 무언가 반환하므로 값 검증이 필수(실측: `reports/scrapling-experiment.md`).
+  wrong-target 증명이 아님**) 검사, non-throwing. 이 순서를 묶은 진입점은 `refcap/refacquire.py
+  acquire()`(blocked=parse 금지, validation issue=미승격, 각 STOP은 `evidence_state`; 단 **advisory —
+  refledger.ingest 미배선**, 위 opt-out 항목 참조). 자가치유·greedy 셀렉터는 늘 무언가 반환하므로 값
+  검증이 필수(실측: `reports/scrapling-experiment.md`).
 - **Anti-bot/login = profile/byo_capture, never autonomous bypass.** A "403, 1–3 originals" result
   on a walled source means the run skipped profile/byo — not that the answer is unreachable.
 - **An honest gap beats a guess.**

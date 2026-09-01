@@ -1,10 +1,15 @@
 #!/usr/bin/env python
-# refacquire - the acquisition FACADE that enforces the safety pipeline (leesearch P0-1).
+# refacquire - the acquisition FACADE for the safety pipeline (leesearch P0-1, PARTIAL).
 #
-# Codex 2nd review, the load-bearing point: refopt/refguard existing as helpers is NOT a safety
-# boundary — nothing called them, so robots errors / soft-blocks / invalid values were enforced
-# nowhere in a real path. This module is the single entrypoint that FORCES, in order and
-# fail-visible, so a wrong result can never be promoted past a gate:
+# STATUS (honest, per Codex 3rd review 2026-09-01): this is currently an ADVISORY facade. The real
+# production path `refledger.ingest()` still fetches via `_http_get` and does NOT route through here,
+# so these gates are enforced ONLY for callers that choose to use acquire(). Wiring the production
+# ingest path through a strict gateway (and making registry/schema required, catching fetch/parser
+# exceptions, stopping on `suspect`) is OPEN work — see reports/codex-review3.md. Do not claim
+# "enforced" until refledger.ingest (or the public entrypoint) is routed through it.
+#
+# When used, this module is the single entrypoint that orders, fail-visible, so a routed caller's
+# wrong result cannot be promoted past a gate:
 #
 #   (registry freshness) -> opt-out -> fetch -> soft-block -> parse -> validate -> evidence_state
 #
