@@ -111,6 +111,21 @@ class ValidateGate(unittest.TestCase):
         self.assertTrue(r.ok)
         self.assertEqual(r.evidence_state, "ok")
 
+    def test_empty_schema_is_unvalidated_not_validated_ok(self):   # C3.1: {} validates nothing -> not a plain ok
+        r = A.acquire("https://x.com/p", fetch_robots=robots("User-agent: *\nAllow: /\n"),
+                      fetch_page=lambda u: A.page_response("<html>rows</html>"),
+                      parser=lambda b: ["junk"], schema={}, selector_hit=True)
+        self.assertEqual(r.evidence_state, "ok_unvalidated")   # distinct from validated "ok"
+
+
+class ConditionalConsent(unittest.TestCase):
+    def test_truthy_string_is_not_consent(self):   # C3.3: allow_conditional="false" must NOT permit
+        page = Spy(A.page_response("<html>rows</html>"))
+        r = A.acquire("https://x.com/p", fetch_robots=robots("User-agent: *\nAllow: /\nLicense: https://x/l.xml\n"),
+                      fetch_page=page, parser=Spy(GOOD_ROWS), schema=SCHEMA, allow_conditional="false")
+        self.assertEqual(r.evidence_state, "needs_consent")
+        self.assertFalse(page.called, "a truthy non-bool override must not open the gate")
+
 
 class TotalContract(unittest.TestCase):
     """Codex 3rd review: the facade had fail-open holes. These pin them shut."""

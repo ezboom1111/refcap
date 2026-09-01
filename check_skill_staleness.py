@@ -63,7 +63,7 @@ def _update_last_verified(path, today_str, verified_by="date-stamp-unverified"):
         f.write(new)
 
 
-def check_staleness(ttl_days=DEFAULT_TTL_DAYS, fix=False):
+def check_staleness(ttl_days=DEFAULT_TTL_DAYS, fix=False, strict=False):
     today = datetime.now(timezone.utc).date()
     today_str = today.isoformat()
 
@@ -113,8 +113,12 @@ def check_staleness(ttl_days=DEFAULT_TTL_DAYS, fix=False):
             "status": status,
         })
 
-    has_stale = any(r["status"] in ("stale", "missing", "invalid-date") for r in results)
-    out = {"pass": not has_stale, "ttl_days": ttl_days, "checked": today_str, "skills": results}
+    fail_states = ["stale", "missing", "invalid-date"]
+    if strict:
+        # release gate: a date-only stamp that was never content-verified must not pass silently.
+        fail_states.append("stamped-unverified")
+    has_stale = any(r["status"] in fail_states for r in results)
+    out = {"pass": not has_stale, "ttl_days": ttl_days, "checked": today_str, "strict": strict, "skills": results}
     stamped = [r["skill"] for r in results if r["status"] == "fixed"]
     if stamped:
         # A date-only stamp with NO content re-verification, applied in THIS run. Surfaced so a green
@@ -138,6 +142,9 @@ def main():
                              "date, which can create a green with zero re-measurement. Requires --yes-unverified.")
     parser.add_argument("--yes-unverified", action="store_true",
                         help="Acknowledge that --fix is a date-only stamp with no content verification.")
+    parser.add_argument("--strict", action="store_true",
+                        help="Fail (exit 1) on skills carrying a date-stamp-unverified marker. Use in a release "
+                             "gate so a --fix stamp cannot pass as green until the content is actually re-verified.")
     args = parser.parse_args()
 
     # False-green guard: --fix rewrites the date without re-verifying anything, so a bare --fix
@@ -146,7 +153,7 @@ def main():
         parser.error("--fix only stamps last_verified=today WITHOUT re-verifying the skill (false-green risk). "
                      "Re-verify the skill content yourself, then pass --fix --yes-unverified to stamp the date.")
 
-    result = check_staleness(args.ttl, args.fix)
+    result = check_staleness(args.ttl, args.fix, strict=args.strict)
     if args.json:
         print(json.dumps(result, ensure_ascii=False, indent=2))
     else:

@@ -87,6 +87,22 @@ class SoftBlock(unittest.TestCase):
         r = G.detect_softblock("<p>x</p>", cookies=Boom(), selector_hit=True)
         self.assertIn("cookie-scan-error", r["signals"])
 
+    def test_empty_body_with_selector_hit_is_empty_shell(self):   # C2.1: a hit on an empty body is impossible
+        r = G.detect_softblock(html="", status=200, selector_hit=True, tiny_body=500)
+        self.assertEqual(r["verdict"], "empty_shell")
+        self.assertTrue(r["blocked"])
+        self.assertIn("empty-body-selector-conflict", r["signals"])
+
+    def test_negative_tiny_body_does_not_disable_challenge(self):   # C2.2: invalid threshold must not slip a shell through
+        r = G.detect_softblock(html="Just a moment...", status=200, selector_hit=True, tiny_body=-1)
+        self.assertEqual(r["verdict"], "blocked")
+        self.assertIn("invalid-tiny_body-defaulted", r["signals"])
+
+    def test_string_status_is_suspect_not_ok(self):   # C2.3: a malformed status can't be read as a clean 200
+        r = G.detect_softblock(html="x" * 5000, status="403", selector_hit=True, tiny_body=500)
+        self.assertEqual(r["verdict"], "suspect")
+        self.assertTrue(any(s.startswith("invalid-status:") for s in r["signals"]))
+
 
 class ValueValidation(unittest.TestCase):
     def test_clean_no_issues(self):
@@ -150,9 +166,18 @@ class ValueValidation(unittest.TestCase):
         issues = G.validate_values("notalist", {"n": {}})
         self.assertTrue(any("rows must be a list" in i for i in issues))
 
-    def test_string_min_rows_does_not_crash(self):
+    def test_string_min_rows_is_visible_issue(self):   # C2.4: invalid config must fail visibly, not disable the guard
         issues = G.validate_values([{"n": "a"}], {"n": {}}, min_rows="5")
-        self.assertIsInstance(issues, list)   # string min_rows ignored, no TypeError
+        self.assertIsInstance(issues, list)                       # never raises
+        self.assertTrue(any("min_rows must be an int" in i for i in issues))
+
+    def test_unknown_field_type_is_issue(self):   # C2.4: a typo'd type must not silently skip validation
+        issues = G.validate_values([{"n": "a"}], {"n": {"type": "integer"}}, min_rows=0)
+        self.assertTrue(any("unknown type" in i for i in issues))
+
+    def test_non_dict_rows_under_schema_is_issue(self):   # C3.1/C2.4: junk rows must not validate clean
+        issues = G.validate_values(["junk", "more"], {"n": {"type": "str"}}, min_rows=0)
+        self.assertTrue(any("rows must be dicts" in i for i in issues))
 
     def test_empty_rows(self):
         self.assertEqual(G.validate_values([], {"x": {}}), ["no rows to validate"])

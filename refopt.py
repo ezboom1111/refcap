@@ -69,8 +69,11 @@ def _meta_pairs(html):
     return p.metas
 
 
-def parse_robots(text, user_agent="*"):
-    """Parse robots.txt; return {rules, crawl_delay, license_urls} for the group matching user_agent."""
+def parse_robots(text, user_agent="*", product_token=None):
+    """Parse robots.txt; return {rule_groups, crawl_delay, license_urls}. `rule_groups` is the LIST of
+    every group that applies (one per matching agent token; the caller ANDs their verdicts so a permissive
+    group from a *different* token can never override a restrictive one). Pass `product_token` to judge by
+    exactly one crawler token instead of every word in a browser-style UA (RFC 9309 §2.2.1)."""
     groups = []
     cur = None
     license_urls = []
@@ -103,10 +106,15 @@ def parse_robots(text, user_agent="*"):
             except ValueError:
                 pass
 
-    chosen = _match_group(groups, user_agent)
+    matched = _match_group(groups, user_agent, product_token)
+    crawl_delay = None
+    for g in matched:
+        if g["crawl_delay"] is not None:
+            crawl_delay = g["crawl_delay"]
+            break
     return {
-        "rules": chosen["rules"] if chosen else [],
-        "crawl_delay": chosen["crawl_delay"] if chosen else None,
+        "rule_groups": [g["rules"] for g in matched],
+        "crawl_delay": crawl_delay,
         "license_urls": license_urls,
     }
 
@@ -123,24 +131,20 @@ def _product_tokens(user_agent):
     return toks
 
 
-def _match_group(groups, user_agent):
-    """RFC 9309 §2.2.1: exact case-insensitive product-token match; ALL groups for that token merge;
-    else the merged '*' group; else None. No prefix heuristic (which false-matched Good->GoodBot)."""
-    tokens = _product_tokens(user_agent)
-
-    def _merge(gs):
-        rules, cd = [], None
-        for g in gs:
-            rules.extend(g["rules"])
-            if cd is None and g["crawl_delay"] is not None:
-                cd = g["crawl_delay"]
-        return {"agents": ["<merged>"], "rules": rules, "crawl_delay": cd}
-
+def _match_group(groups, user_agent, product_token=None):
+    """RFC 9309 §2.2.1: return the LIST of applicable groups (exact case-insensitive product-token match),
+    else the '*' group(s), else []. Groups are returned SEPARATELY, not merged: the caller requires every
+    applicable group to allow a path (most-restrictive), so `GoodBot: Disallow /` cannot be overridden by a
+    `Mozilla: Allow /private` group just because a browser-style UA string contains both tokens. Pass an
+    explicit `product_token` to judge by that one token only (the safe way to identify a crawler)."""
+    if product_token:
+        tokens = {product_token.strip().lower()}
+    else:
+        tokens = _product_tokens(user_agent)
     specific = [g for g in groups if any(t in tokens for t in g["agents"] if t != "*")]
     if specific:
-        return _merge(specific)
-    star = [g for g in groups if "*" in g["agents"]]
-    return _merge(star) if star else None
+        return specific
+    return [g for g in groups if "*" in g["agents"]]
 
 
 def _robots_match(pattern, path):
@@ -197,7 +201,13 @@ def _normalize_fetch(resp):
         return resp
     if isinstance(resp, str):
         return text_response(resp)
-    # duck-typed object with .status/.text
+    # duck-typed object with .status/.text. A degenerate object with NEITHER a status NOR a body attribute
+    # is not a response at all — defaulting it to 200/allow-all was a fail-open (a random object read as
+    # "robots says yes"). Reject it so resolve_optout records the error and returns `unknown`, never `allowed`.
+    has_status = hasattr(resp, "status") or hasattr(resp, "status_code")
+    has_body = hasattr(resp, "text")
+    if not (has_status or has_body):
+        raise TypeError(f"unrecognized robots response object: {type(resp).__name__}")
     status = getattr(resp, "status", getattr(resp, "status_code", 200))
     ctype = getattr(resp, "content_type", getattr(resp, "headers", {}).get("Content-Type", "text/plain")
                     if hasattr(resp, "headers") else "text/plain")
@@ -205,9 +215,10 @@ def _normalize_fetch(resp):
     return RobotsResponse(status=status, content_type=ctype, text=text)
 
 
-def resolve_optout(url, fetch, user_agent="*", page_html="", page_headers=None):
+def resolve_optout(url, fetch, user_agent="*", page_html="", page_headers=None, product_token=None):
     """Resolve opt-out posture. FAIL-VISIBLE: a robots read that cannot be trusted is `unknown`,
-    never `allowed`. Returns {status, signals, reasons, license_urls, crawl_delay}."""
+    never `allowed`. Pass `product_token` to judge robots groups by one crawler token instead of every
+    word in a browser-style UA. Returns {status, signals, reasons, license_urls, crawl_delay}."""
     parts = urlsplit(url)
     robots_url = f"{parts.scheme}://{parts.netloc}/robots.txt"
     match_target = (parts.path or "/") + (("?" + parts.query) if parts.query else "")
@@ -228,11 +239,13 @@ def resolve_optout(url, fetch, user_agent="*", page_html="", page_headers=None):
         elif not _is_plaintext_ct(resp.content_type):
             reasons.append(f"robots.txt content-type '{resp.content_type}' is not text/plain -> not robots (login/JSON/wall page)")
         else:
-            parsed = parse_robots(resp.text, user_agent)
+            parsed = parse_robots(resp.text, user_agent, product_token)
             license_urls = list(parsed["license_urls"])
             crawl_delay = parsed["crawl_delay"]
             robots_ok = True
-            if not _path_allowed(parsed["rules"], match_target):
+            # Most-restrictive: disallowed if ANY applicable group disallows the path (a permissive group
+            # for a different token never rescues it). No applicable group -> allow-all (all([]) is True).
+            if not all(_path_allowed(rules, match_target) for rules in parsed["rule_groups"]):
                 signals.append("robots-disallow")
                 reasons.append(f"robots.txt Disallow matches {path_for_msg} for UA {user_agent}")
     except Exception as e:  # noqa: BLE001
@@ -249,6 +262,10 @@ def resolve_optout(url, fetch, user_agent="*", page_html="", page_headers=None):
     if license_urls:
         signals.append("rsl-license")
         reasons.append(f"RSL License directive -> external XML (fetch to read terms): {', '.join(license_urls)}")
+    header_scan_failed = "header-scan-error" in page_sigs
+    if header_scan_failed:
+        signals.append("header-scan-error")
+        reasons.append("X-Robots-Tag/header scan failed -> header opt-out posture undetermined")
 
     if "robots-disallow" in signals:
         status = DISALLOWED
@@ -256,6 +273,10 @@ def resolve_optout(url, fetch, user_agent="*", page_html="", page_headers=None):
         status = UNKNOWN
     elif any(s in signals for s in ("rsl-license", "tdmrep", "noai-meta")):
         status = CONDITIONAL
+    elif header_scan_failed:
+        # A positive opt-out signal (above) still wins; but with NO positive signal AND an unreadable
+        # header scan we cannot claim "no opt-out" -> undecidable, never a clean allow.
+        status = UNKNOWN
     else:
         status = ALLOWED
         reasons.append("robots readable, path allowed, no license/TDM/noai signal")

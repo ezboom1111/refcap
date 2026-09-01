@@ -161,11 +161,28 @@ class StrictContract(unittest.TestCase):
         html = '<meta name="robots" content="noai"><meta name="robots" content="index">'
         self.assertIn("noai", R.scan_noai(html))
 
-    def test_hostile_page_headers_do_not_crash(self):
+    def test_degenerate_robots_object_is_unknown_not_allowed(self):   # C1.2: a random object != "robots says yes"
+        r = R.resolve_optout("https://x.com/p", fetch=lambda u: object(), user_agent="MyBot")
+        self.assertEqual(r["status"], R.UNKNOWN)
+
+    def test_cross_token_group_cannot_override_disallow(self):   # C1.3: Mozilla:Allow must not rescue GoodBot:Disallow
+        robots = "User-agent: GoodBot\nDisallow: /\n\nUser-agent: Mozilla\nAllow: /private\n"
+        r = R.resolve_optout("https://x.com/private", fetch_text(robots),
+                             user_agent="Mozilla/5.0 (compatible; GoodBot/1.0)")
+        self.assertEqual(r["status"], R.DISALLOWED)
+
+    def test_explicit_product_token_judges_by_one_token(self):   # C1.3: product_token ignores the browser prefix
+        robots = "User-agent: GoodBot\nDisallow: /\n\nUser-agent: Mozilla\nAllow: /private\n"
+        r = R.resolve_optout("https://x.com/private", fetch_text(robots),
+                             user_agent="irrelevant", product_token="GoodBot")
+        self.assertEqual(r["status"], R.DISALLOWED)
+
+    def test_hostile_page_headers_are_unknown_not_allowed(self):   # C1.1: a header scan we can't read != "no opt-out"
         class Boom:
             def items(self): raise RuntimeError("nope")
         r = R.resolve_optout("https://x.com/p", fetch_text("User-agent: *\nAllow: /\n"), page_headers=Boom())
-        self.assertIn(r["status"], (R.ALLOWED, R.CONDITIONAL))  # resolved, not raised
+        self.assertEqual(r["status"], R.UNKNOWN)          # resolved (not raised) AND fail-visible, not a clean allow
+        self.assertIn("header-scan-error", r["signals"])
 
 
 class Misc(unittest.TestCase):

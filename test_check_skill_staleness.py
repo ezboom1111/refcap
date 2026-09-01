@@ -202,6 +202,15 @@ class Staleness(unittest.TestCase):
         self.assertEqual(res["skills"][0]["status"], "stale")
         self.assertFalse(res["pass"])
 
+    def test_strict_fails_on_stamped_unverified(self):   # C5: release gate can refuse a bare --fix stamp
+        self._skill_verified_by("gate", self._today().isoformat(), "date-stamp-unverified")
+        self.assertTrue(SS.check_staleness(ttl_days=30)["pass"])              # advisory default: passes
+        self.assertFalse(SS.check_staleness(ttl_days=30, strict=True)["pass"])  # strict: fails
+
+    def test_strict_still_passes_real_verification(self):   # a genuine verify is not caught by --strict
+        self._skill_verified_by("real2", self._today().isoformat(), "content-reverify-2026-09-01")
+        self.assertTrue(SS.check_staleness(ttl_days=30, strict=True)["pass"])
+
 
 if __name__ == "__main__":
     unittest.main()

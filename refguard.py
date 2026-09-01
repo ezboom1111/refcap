@@ -30,6 +30,7 @@ _JS_WALL_MARKERS = (
     "enable javascript", "javascript is required", "requires javascript", "javascript to run this app",
 )
 _TINY_BODY = 3000
+_KNOWN_FIELD_TYPES = frozenset({"int", "float", "str"})
 
 
 def detect_softblock(html="", status=200, cookies=None, selector_hit=None, tiny_body=_TINY_BODY):
@@ -47,11 +48,18 @@ def detect_softblock(html="", status=200, cookies=None, selector_hit=None, tiny_
                                         if isinstance(html, (bytes, bytearray)) else str(html))
     except Exception:  # noqa: BLE001
         html = ""
-    if not isinstance(tiny_body, int) or isinstance(tiny_body, bool):
-        tiny_body = _TINY_BODY   # hostile/omitted tiny_body must not crash or disable the check
+    signals = []
+    if not isinstance(tiny_body, int) or isinstance(tiny_body, bool) or tiny_body <= 0:
+        # hostile/omitted/non-positive tiny_body must not crash OR silently DISABLE the tiny check
+        # (a negative threshold makes `body_len < tiny_body` always False -> challenge shells slip through).
+        tiny_body = _TINY_BODY
+        signals.append("invalid-tiny_body-defaulted")
     low = html.lower()
     body_len = len(html)
-    signals = []
+    # A non-None status that is not a real int is a malformed response — it must NOT be read as a clean 200.
+    status_invalid = status is not None and (not isinstance(status, int) or isinstance(status, bool))
+    if status_invalid:
+        signals.append(f"invalid-status:{status!r}")
 
     marker = next((m for m in _CHALLENGE_MARKERS if m in low), None)
     if marker:
@@ -80,6 +88,8 @@ def detect_softblock(html="", status=200, cookies=None, selector_hit=None, tiny_
     # --- precedence ---
     if abck_unpassed:
         verdict, blocked = "blocked", True
+    elif status_invalid:
+        verdict, blocked = "suspect", False               # malformed status -> cannot be trusted as a clean 200
     elif is_http_err and status in (404, 410):
         verdict, blocked = "http_error", False           # content genuinely absent, not a wall
     elif is_http_err and status >= 500:
@@ -89,6 +99,11 @@ def detect_softblock(html="", status=200, cookies=None, selector_hit=None, tiny_
         verdict, blocked = ("blocked", True) if marker else ("suspect", False)
     elif is_http_err:  # other 4xx
         verdict, blocked = "http_error", False
+    elif body_len == 0:
+        # nothing was served; a selector "hit" on an empty body is impossible, so it cannot rescue this.
+        if selector_hit is True:
+            signals.append("empty-body-selector-conflict")
+        verdict, blocked = "empty_shell", True
     elif marker and tiny:
         verdict, blocked = "blocked", True                # tiny challenge shell: block even if a selector spuriously "hit"
     elif selector_hit is True:
@@ -130,10 +145,23 @@ def validate_values(rows, schema, min_rows=None):
     if schema is not None and not isinstance(schema, dict):
         return [f"schema must be a dict, got {type(schema).__name__}"]
     n = len(rows)
-    if isinstance(min_rows, int) and not isinstance(min_rows, bool) and n < min_rows:
-        issues.append(f"[_table] only {n} rows < min_rows {min_rows}")
+    if min_rows is not None:
+        if isinstance(min_rows, int) and not isinstance(min_rows, bool):
+            if n < min_rows:
+                issues.append(f"[_table] only {n} rows < min_rows {min_rows}")
+        else:
+            # an invalid min_rows must be a VISIBLE issue, not a silently-ignored (disabled) guard
+            issues.append(f"[_table] min_rows must be an int, got {type(min_rows).__name__}")
+    if isinstance(schema, dict) and schema and not all(isinstance(_r, dict) for _r in rows):
+        issues.append("[_table] rows must be dicts when a field schema is given")
 
     for field, rule in (schema or {}).items():
+        if not isinstance(rule, dict):
+            issues.append(f"[{field}] rule must be a dict, got {type(rule).__name__}")
+            continue
+        t_declared = rule.get("type")
+        if t_declared is not None and t_declared not in _KNOWN_FIELD_TYPES:
+            issues.append(f"[{field}] unknown type {t_declared!r} (known: {sorted(_KNOWN_FIELD_TYPES)})")
         try:
             vals = [(_r.get(field) if isinstance(_r, dict) else None) for _r in rows]
             present = [v for v in vals if v is not None and str(v).strip() != ""]

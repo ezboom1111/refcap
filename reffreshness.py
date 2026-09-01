@@ -20,6 +20,7 @@ from datetime import date, datetime, timezone
 _REQUIRED = ("id", "claim", "status", "source_refs", "observed_at", "ttl_days", "scope")
 _VALID_STATUS = {"observed", "announced", "effective", "degraded", "dead", "partially-verified", "unverified"}
 _UNVERIFIED_STATUS = {"unverified", "partially-verified"}
+_UNHEALTHY_STATUS = {"dead", "degraded"}   # a tool marked dead/degraded is unusable even while within TTL
 
 DEFAULT_REGISTRY = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                 "skills", "leesearch", "facts.registry.json")
@@ -63,6 +64,10 @@ def load_registry(path=DEFAULT_REGISTRY):
             issues.append(f"duplicate id: {rid}")
             continue
         seen_ids.add(rid)
+        # status must be a STRING before set membership — a list status raised TypeError: unhashable type.
+        if not isinstance(r["status"], str):
+            issues.append(f"{rid}: status must be a string, got {type(r['status']).__name__}")
+            continue
         if r["status"] not in _VALID_STATUS:
             issues.append(f"{rid}: invalid status '{r['status']}'")
             continue
@@ -71,6 +76,13 @@ def load_registry(path=DEFAULT_REGISTRY):
             continue
         if not isinstance(r["source_refs"], list) or not r["source_refs"]:
             issues.append(f"{rid}: source_refs must be a non-empty list")
+            continue
+        # each source_ref must be a real non-empty string — a [null]/[""] list was clean-loading before.
+        if any(not isinstance(s, str) or not s.strip() for s in r["source_refs"]):
+            issues.append(f"{rid}: source_refs items must be non-empty strings")
+            continue
+        if not isinstance(r["scope"], str) or not r["scope"].strip():
+            issues.append(f"{rid}: scope must be a non-empty string")
             continue
         try:
             observed = _parse_date(r["observed_at"])
@@ -116,12 +128,18 @@ def evaluate(records, today=None):
 
 def registry_check(path=DEFAULT_REGISTRY, today=None):
     """Adapter for refacquire's registry_check hook: return non-blocking warning strings for
-    load issues + any record that is stale/pending/unverified/corrupt. Empty list == all fresh."""
+    load issues + any record that is stale/pending/unverified/corrupt, AND any record whose status
+    is dead/degraded (unusable regardless of freshness — otherwise a recently-observed dead tool is
+    machine-silent). Empty list == all fresh AND healthy."""
     records, issues = load_registry(path)
     warnings = list(issues)
+    by_id = {r["id"]: r for r in records}
     for e in evaluate(records, today):
+        rec = by_id.get(e["id"], {})
         if e["freshness"] != "fresh":
             warnings.append(f"{e['id']} [{e['freshness']}]: {e['reason']}")
+        elif rec.get("status") in _UNHEALTHY_STATUS:
+            warnings.append(f"{e['id']} [{rec['status']}]: within TTL but health is {rec['status']} -> unusable")
     return warnings
 
 

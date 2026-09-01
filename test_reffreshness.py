@@ -95,6 +95,21 @@ class StrictLoad(unittest.TestCase):
         e = F.evaluate([_rec(observed_at="2030-01-01")], today=TODAY)[0]
         self.assertEqual(e["freshness"], "corrupt")
 
+    def test_list_status_does_not_crash(self):   # C4.1: unhashable status must be an issue, not a TypeError
+        recs, iss = F.load_registry(_reg([_rec(id="a", status=["observed"])]))
+        self.assertEqual(recs, [])
+        self.assertTrue(any("status must be a string" in i for i in iss))
+
+    def test_null_source_ref_item_rejected(self):   # C4.2: [null] source_refs must not clean-load
+        recs, iss = F.load_registry(_reg([_rec(id="a", source_refs=[None])]))
+        self.assertEqual(recs, [])
+        self.assertTrue(any("source_refs items" in i for i in iss))
+
+    def test_nonstring_scope_rejected(self):   # C4.2: scope shape validated
+        recs, iss = F.load_registry(_reg([_rec(id="a", scope=[])]))
+        self.assertEqual(recs, [])
+        self.assertTrue(any("scope" in i for i in iss))
+
 
 class Evaluate(unittest.TestCase):
     def test_fresh_within_ttl(self):
@@ -134,6 +149,11 @@ class RegistryCheckHook(unittest.TestCase):
         self.assertTrue(any("stale1" in x for x in w))
         self.assertTrue(any("pend1" in x for x in w))
         self.assertFalse(any("fresh1" in x for x in w))
+
+    def test_dead_within_ttl_is_warned(self):   # C4.4: dead/degraded health must not be machine-silent
+        p = _reg([_rec(id="deadtool", status="dead", observed_at="2026-08-30", ttl_days=90)])
+        w = F.registry_check(p, today=TODAY)
+        self.assertTrue(any("deadtool" in x and "dead" in x for x in w))
 
 
 class RealRegistry(unittest.TestCase):

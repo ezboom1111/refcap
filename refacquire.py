@@ -69,7 +69,11 @@ def acquire(url, *, fetch_robots, fetch_page, parser, schema=None, user_agent="*
         return AcquireResult(False, "refused_optout", "optout", opt, None, None, None, reasons)
     if opt["status"] == refopt.UNKNOWN:
         return AcquireResult(False, "undecidable_optout", "optout", opt, None, None, None, reasons)
-    if opt["status"] == refopt.CONDITIONAL and not allow_conditional:
+    # allow_conditional must be a LITERAL True. A truthy non-bool (e.g. the string "false") must NOT be
+    # read as consent — an override is a deliberate boolean decision, not any truthy value.
+    if opt["status"] == refopt.CONDITIONAL and allow_conditional is not True:
+        if allow_conditional not in (False, None):
+            reasons.append(f"allow_conditional must be True to consent; got {allow_conditional!r} -> treated as no consent")
         return AcquireResult(False, "needs_consent", "optout", opt, None, None, None, reasons)
 
     # 2) fetch (only now). fetch/parse exceptions are STATES, not crashes (fail-visible).
@@ -101,11 +105,13 @@ def acquire(url, *, fetch_robots, fetch_page, parser, schema=None, user_agent="*
     if not rows:
         return AcquireResult(False, "parse_empty", "parse", opt, sb, [], None, reasons + ["parser returned no rows"])
 
-    # 5) validate — rows are NOT promoted if there are issues. No schema => cannot confirm => ok_unvalidated.
-    if schema is None:
+    # 5) validate — rows are NOT promoted if there are issues. No schema (None OR empty dict) => nothing was
+    # checked => ok_unvalidated, never a plain validated `ok`. An empty {} validates zero fields, so treating
+    # it as a pass would promote unchecked rows (junk included) as if validated.
+    if not schema:
         state = "ok_unvalidated" if not suspect else "suspect"
         return AcquireResult(not suspect, state, None if not suspect else "softblock", opt, sb, rows, [],
-                             reasons + ["no schema -> validation not run"])
+                             reasons + ["no (or empty) schema -> validation not run"])
     issues = refguard.validate_values(rows, schema, min_rows=min_rows)
     if issues:
         return AcquireResult(False, "validation_failed", "validate", opt, sb, rows, issues, reasons + issues)
