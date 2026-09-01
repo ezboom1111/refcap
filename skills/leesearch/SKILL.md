@@ -338,6 +338,10 @@ run T2 ceremony on a T0 question.
 - **Seal the load-bearing few, not everything.** Casual questions never enter the farm.
 - **gate=OK ≠ true.** cite-or-fail proves the quote exists in registered bytes, not that the bytes
   are correct. Corroborate the highest-stakes number across INDEPENDENT domains.
+- **HTTP 200 ≠ 성공, "무언가 반환" ≠ 옳음.** 파싱 전 `refcap/refguard.py detect_softblock`으로
+  챌린지/빈셸/Akamai 미통과 판별(작은 정상 페이지는 오탐 안 함, JS-wall은 차단 아닌 렌더 승격으로 분리).
+  수집 후 `validate_values`로 type/range/empty/uniform + **wrong-target(광고 오답) reject_regex** 검사 —
+  자가치유·greedy 셀렉터는 늘 무언가 반환하므로 값 검증이 필수(실측 근거: `reports/scrapling-experiment.md`).
 - **Anti-bot/login = profile/byo_capture, never autonomous bypass.** A "403, 1–3 originals" result
   on a walled source means the run skipped profile/byo — not that the answer is unreachable.
 - **An honest gap beats a guess.**
