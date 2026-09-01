@@ -1,0 +1,97 @@
+#!/usr/bin/env python
+# refacquire - the acquisition FACADE that enforces the safety pipeline (leesearch P0-1).
+#
+# Codex 2nd review, the load-bearing point: refopt/refguard existing as helpers is NOT a safety
+# boundary — nothing called them, so robots errors / soft-blocks / invalid values were enforced
+# nowhere in a real path. This module is the single entrypoint that FORCES, in order and
+# fail-visible, so a wrong result can never be promoted past a gate:
+#
+#   (registry freshness) -> opt-out -> fetch -> soft-block -> parse -> validate -> evidence_state
+#
+# Network + parsing are INJECTED (leesearch gathers natively); this module owns only the ORDER and
+# the STOP conditions. Every stop is explicit in `evidence_state` + `gate`, never a silent proceed.
+import refopt
+import refguard
+from collections import namedtuple
+
+PageResponse = namedtuple("PageResponse", ["status", "content_type", "body", "cookies"])
+AcquireResult = namedtuple("AcquireResult",
+                           ["ok", "evidence_state", "gate", "optout", "softblock", "rows", "issues", "reasons"])
+
+
+def page_response(body, status=200, content_type="text/html", cookies=None):
+    return PageResponse(status=status, content_type=content_type, body=body, cookies=cookies or {})
+
+
+def _norm_page(p):
+    if isinstance(p, PageResponse):
+        return p
+    if isinstance(p, str):
+        return page_response(p)
+    return PageResponse(
+        status=getattr(p, "status", getattr(p, "status_code", 200)),
+        content_type=getattr(p, "content_type", "text/html"),
+        body=getattr(p, "body", getattr(p, "text", "")),
+        cookies=getattr(p, "cookies", {}) or {},
+    )
+
+
+def acquire(url, *, fetch_robots, fetch_page, parser, schema=None, user_agent="*",
+            selector_hit=None, registry_check=None, allow_conditional=False, min_rows=None):
+    """Run one URL through the enforced safety pipeline. Returns AcquireResult (never raises for
+    control flow; a stop is a value, not an exception).
+
+    - fetch_robots(robots_url) -> refopt.RobotsResponse | str | None
+    - fetch_page(url)          -> PageResponse | str | duck-typed. Called ONLY if opt-out permits.
+    - parser(body)             -> list[dict]. Called ONLY if not blocked.
+    - schema                   -> refguard.validate_values schema. If issues, rows are NOT promoted.
+    - registry_check()         -> optional list[str] freshness warnings (non-blocking, surfaced).
+    """
+    reasons = []
+    if registry_check is not None:
+        try:
+            for w in (registry_check() or []):
+                reasons.append(f"registry: {w}")
+        except Exception as e:  # noqa: BLE001
+            reasons.append(f"registry check error: {type(e).__name__}: {e}")
+
+    # 1) opt-out gate — content is not fetched unless this permits it.
+    opt = refopt.resolve_optout(url, fetch_robots, user_agent=user_agent)
+    reasons.extend(opt["reasons"])
+    if opt["status"] == refopt.DISALLOWED:
+        return AcquireResult(False, "refused_optout", "optout", opt, None, None, None, reasons)
+    if opt["status"] == refopt.UNKNOWN:
+        return AcquireResult(False, "undecidable_optout", "optout", opt, None, None, None, reasons)
+    if opt["status"] == refopt.CONDITIONAL and not allow_conditional:
+        return AcquireResult(False, "needs_consent", "optout", opt, None, None, None, reasons)
+
+    # 2) fetch (only now)
+    page = _norm_page(fetch_page(url))
+
+    # 3) soft-block gate — parser is not called if this blocks.
+    sb = refguard.detect_softblock(page.body, status=page.status, cookies=page.cookies,
+                                   selector_hit=selector_hit)
+    if sb["blocked"]:
+        return AcquireResult(False, "blocked", "softblock", opt, sb, None, None, reasons + [f"softblock: {sb['verdict']}"])
+    if sb["verdict"] == "http_error":
+        return AcquireResult(False, "http_error", "softblock", opt, sb, None, None, reasons + [f"http {page.status}"])
+    if sb["verdict"] == "js_wall":
+        return AcquireResult(False, "js_wall", "softblock", opt, sb, None, None, reasons + ["js render required"])
+    if sb["verdict"] == "suspect":
+        reasons.append(f"softblock suspect: {sb['signals']}")
+
+    # 4) parse
+    rows = parser(page.body)
+    if not rows:
+        return AcquireResult(False, "parse_empty", "parse", opt, sb, [], None, reasons + ["parser returned no rows"])
+
+    # 5) validate — rows are NOT promoted if there are issues.
+    issues = refguard.validate_values(rows, schema, min_rows=min_rows) if schema else []
+    if issues:
+        return AcquireResult(False, "validation_failed", "validate", opt, sb, rows, issues, reasons + issues)
+
+    return AcquireResult(True, "ok", None, opt, sb, rows, [], reasons + ["all gates passed"])
+
+
+if __name__ == "__main__":  # pragma: no cover
+    print("refacquire: import and call acquire(); it enforces optout->fetch->softblock->parse->validate.")

@@ -304,9 +304,13 @@ run T2 ceremony on a T0 question.
   `allowed | disallowed | conditional | unknown`으로 명시하라(fail-visible — 못 읽으면 "allowed" 아님).
   EU는 opt-out 신호를 놓치고 수집하면 저작권 예외가 소멸한다(GPAI 의무). ⚠️ `llms.txt`(비표준)를 법적
   opt-out으로 취급 금지 — 공식 RSL과 구분. RSL 세부 어휘·검증 상태는 `facts.registry.md` F-003.
-  **구현**: `refcap/refopt.py` `resolve_optout(url, fetch)` — robots(path+query·UA그룹·Allow오버라이드·
-  `*`/`$`)·RSL `License:`·TDMRep·noai를 `allowed|disallowed|conditional|unknown`으로 해석(fail-visible,
-  네트워크 주입, 테스트 20). 라이선스 XML 본문 파싱은 스펙 확인 후(F-003) — 지금은 license_urls만 노출.
+  **구현**: `refcap/refopt.py` `resolve_optout(url, fetch)` — robots(status/content-type·path+query·
+  UA product-token·Allow오버라이드·`*`/`$`)·RSL `License:`·TDMRep·noai를 `allowed|disallowed|
+  conditional|unknown`으로 해석(fail-visible: 로그인HTML·403·5xx=unknown, 404=allow-all; 테스트 23).
+  라이선스 XML 본문 파싱은 스펙 확인 후(F-003) — 지금은 license_urls만 노출.
+  **강제 배선**: `refcap/refacquire.py acquire()`가 optout→fetch→softblock→parse→validate를 순서대로
+  STOP-게이트로 강제한다(disallowed/unknown=fetch 금지, conditional=동의 게이트). helper를 직접
+  부르지 말고 이 진입점을 통해라 — 그래야 게이트가 실제로 걸린다.
 - **네이버 공식 API 상태**: 검색(블로그·뉴스·카페·지식iN) API는 유지되나 **쇼핑·책·전문자료
   코퍼스는 종료**(2026 API HUB 이전) — 가격비교를 공식 API로 뽑으려 시간 낭비 말 것. 현재 상태·날짜는
   `facts.registry.md` F-002가 최신(플랫폼 정책은 시효 있음).
@@ -338,10 +342,13 @@ run T2 ceremony on a T0 question.
 - **Seal the load-bearing few, not everything.** Casual questions never enter the farm.
 - **gate=OK ≠ true.** cite-or-fail proves the quote exists in registered bytes, not that the bytes
   are correct. Corroborate the highest-stakes number across INDEPENDENT domains.
-- **HTTP 200 ≠ 성공, "무언가 반환" ≠ 옳음.** 파싱 전 `refcap/refguard.py detect_softblock`으로
-  챌린지/빈셸/Akamai 미통과 판별(작은 정상 페이지는 오탐 안 함, JS-wall은 차단 아닌 렌더 승격으로 분리).
-  수집 후 `validate_values`로 type/range/empty/uniform + **wrong-target(광고 오답) reject_regex** 검사 —
-  자가치유·greedy 셀렉터는 늘 무언가 반환하므로 값 검증이 필수(실측 근거: `reports/scrapling-experiment.md`).
+- **HTTP 200 ≠ 성공, "무언가 반환" ≠ 옳음.** `refcap/refguard.py detect_softblock`은 챌린지/빈셸/
+  Akamai 미통과를 판별하되 **selector가 hit하면 마커가 있어도 콘텐츠로 취급**(정상 기사 오탐 제거),
+  HTTP 4xx/5xx는 `http_error`로 anti-bot과 분리, JS-wall은 렌더 승격으로 분리. `validate_values`는
+  type/range/empty/**non-finite(NaN)**/uniform/`unique`/min_rows + reject_regex(**known-junk 데닐리스트 —
+  wrong-target 증명이 아님**) 검사, non-throwing. 이 순서를 강제하는 진입점은 `refcap/refacquire.py
+  acquire()`(blocked=parse 금지, validation issue=미승격, 각 STOP은 `evidence_state`로 명시). 자가치유·
+  greedy 셀렉터는 늘 무언가 반환하므로 값 검증이 필수(실측: `reports/scrapling-experiment.md`).
 - **Anti-bot/login = profile/byo_capture, never autonomous bypass.** A "403, 1–3 originals" result
   on a walled source means the run skipped profile/byo — not that the answer is unreachable.
 - **An honest gap beats a guess.**

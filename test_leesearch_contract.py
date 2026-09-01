@@ -51,17 +51,19 @@ class SkillContract(unittest.TestCase):
     def test_skill_points_at_existing_modules(self):
         self.assertIn("refopt.py", self.skill)
         self.assertIn("refguard.py", self.skill)
+        self.assertIn("refacquire.py", self.skill)          # the enforcing facade must be referenced
         self.assertIn("facts.registry.md", self.skill)
-        self.assertTrue(os.path.exists(os.path.join(HERE, "refopt.py")))
-        self.assertTrue(os.path.exists(os.path.join(HERE, "refguard.py")))
+        for mod in ("refopt.py", "refguard.py", "refacquire.py"):
+            self.assertTrue(os.path.exists(os.path.join(HERE, mod)))
         self.assertTrue(os.path.exists(REGISTRY))
 
     def test_referenced_entrypoints_importable(self):
         sys.path.insert(0, HERE)
-        import refopt, refguard
+        import refopt, refguard, refacquire
         self.assertTrue(hasattr(refopt, "resolve_optout"))
         self.assertTrue(hasattr(refguard, "detect_softblock"))
         self.assertTrue(hasattr(refguard, "validate_values"))
+        self.assertTrue(hasattr(refacquire, "acquire"))     # pipeline entrypoint exists
 
     # --- registry structure ----------------------------------------------
     def test_registry_has_status_vocab_and_facts(self):
