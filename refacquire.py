@@ -33,6 +33,8 @@ def _norm_page(p):
         return p
     if isinstance(p, str):
         return page_response(p)
+    if not (hasattr(p, "body") or hasattr(p, "text")):
+        return None   # degenerate object: no body -> fetch_invalid, never default to empty ok
     return PageResponse(
         status=getattr(p, "status", getattr(p, "status_code", 200)),
         content_type=getattr(p, "content_type", "text/html"),
@@ -70,8 +72,13 @@ def acquire(url, *, fetch_robots, fetch_page, parser, schema=None, user_agent="*
     if opt["status"] == refopt.CONDITIONAL and not allow_conditional:
         return AcquireResult(False, "needs_consent", "optout", opt, None, None, None, reasons)
 
-    # 2) fetch (only now)
-    page = _norm_page(fetch_page(url))
+    # 2) fetch (only now). fetch/parse exceptions are STATES, not crashes (fail-visible).
+    try:
+        page = _norm_page(fetch_page(url))
+    except Exception as e:  # noqa: BLE001
+        return AcquireResult(False, "fetch_error", "fetch", opt, None, None, None, reasons + [f"fetch error: {type(e).__name__}: {e}"])
+    if page is None or not isinstance(page.body, (str, bytes, bytearray)):
+        return AcquireResult(False, "fetch_invalid", "fetch", opt, None, None, None, reasons + ["fetch returned no usable body"])
 
     # 3) soft-block gate — parser is not called if this blocks.
     sb = refguard.detect_softblock(page.body, status=page.status, cookies=page.cookies,
@@ -82,19 +89,30 @@ def acquire(url, *, fetch_robots, fetch_page, parser, schema=None, user_agent="*
         return AcquireResult(False, "http_error", "softblock", opt, sb, None, None, reasons + [f"http {page.status}"])
     if sb["verdict"] == "js_wall":
         return AcquireResult(False, "js_wall", "softblock", opt, sb, None, None, reasons + ["js render required"])
-    if sb["verdict"] == "suspect":
+    suspect = sb["verdict"] == "suspect"
+    if suspect:
         reasons.append(f"softblock suspect: {sb['signals']}")
 
     # 4) parse
-    rows = parser(page.body)
+    try:
+        rows = parser(page.body)
+    except Exception as e:  # noqa: BLE001
+        return AcquireResult(False, "parse_error", "parse", opt, sb, None, None, reasons + [f"parse error: {type(e).__name__}: {e}"])
     if not rows:
         return AcquireResult(False, "parse_empty", "parse", opt, sb, [], None, reasons + ["parser returned no rows"])
 
-    # 5) validate — rows are NOT promoted if there are issues.
-    issues = refguard.validate_values(rows, schema, min_rows=min_rows) if schema else []
+    # 5) validate — rows are NOT promoted if there are issues. No schema => cannot confirm => ok_unvalidated.
+    if schema is None:
+        state = "ok_unvalidated" if not suspect else "suspect"
+        return AcquireResult(not suspect, state, None if not suspect else "softblock", opt, sb, rows, [],
+                             reasons + ["no schema -> validation not run"])
+    issues = refguard.validate_values(rows, schema, min_rows=min_rows)
     if issues:
         return AcquireResult(False, "validation_failed", "validate", opt, sb, rows, issues, reasons + issues)
 
+    # A suspect soft-block that still parsed+validated is flagged (ok=False), not silently promoted.
+    if suspect:
+        return AcquireResult(False, "ok_suspect", "softblock", opt, sb, rows, [], reasons + ["validated but soft-block suspect — agent must confirm"])
     return AcquireResult(True, "ok", None, opt, sb, rows, [], reasons + ["all gates passed"])
 
 

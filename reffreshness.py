@@ -39,6 +39,8 @@ def load_registry(path=DEFAULT_REGISTRY):
             data = json.load(f)
     except (json.JSONDecodeError, OSError) as e:
         return [], [f"registry unreadable: {type(e).__name__}: {e}"]
+    if not isinstance(data, dict):
+        return [], [f"registry root must be an object, got {type(data).__name__}"]
     records = data.get("records")
     if not isinstance(records, list):
         return [], ["registry has no 'records' list"]
@@ -54,6 +56,9 @@ def load_registry(path=DEFAULT_REGISTRY):
             issues.append(f"record #{i} ({r.get('id', '?')}) missing fields: {missing}")
             continue
         rid = r["id"]
+        if not isinstance(rid, str) or not rid.strip():
+            issues.append(f"record #{i}: id must be a non-empty string")
+            continue
         if rid in seen_ids:
             issues.append(f"duplicate id: {rid}")
             continue
@@ -61,14 +66,21 @@ def load_registry(path=DEFAULT_REGISTRY):
         if r["status"] not in _VALID_STATUS:
             issues.append(f"{rid}: invalid status '{r['status']}'")
             continue
+        if not isinstance(r["claim"], str) or not r["claim"].strip():
+            issues.append(f"{rid}: claim must be a non-empty string")
+            continue
+        if not isinstance(r["source_refs"], list) or not r["source_refs"]:
+            issues.append(f"{rid}: source_refs must be a non-empty list")
+            continue
         try:
-            _parse_date(r["observed_at"])
+            observed = _parse_date(r["observed_at"])
             if r.get("effective_at"):
                 _parse_date(r["effective_at"])
         except (ValueError, TypeError):
             issues.append(f"{rid}: unparseable date (observed_at/effective_at)")
             continue
-        if not isinstance(r["ttl_days"], int) or r["ttl_days"] <= 0:
+        # bool is an int subclass -> reject explicitly so ttl_days:true can't slip through
+        if isinstance(r["ttl_days"], bool) or not isinstance(r["ttl_days"], int) or r["ttl_days"] <= 0:
             issues.append(f"{rid}: ttl_days must be a positive int")
             continue
         valid.append(r)
@@ -83,15 +95,18 @@ def evaluate(records, today=None):
         observed = _parse_date(r["observed_at"])
         eff = _parse_date(r["effective_at"]) if r.get("effective_at") else None
         age = (today - observed).days
-        if eff and eff > today:
+        if age < 0:
+            fresh = "corrupt"
+            reason = f"observed_at {observed.isoformat()} is in the future ({-age}d) -> data error / fake stamp"
+        elif eff and eff > today:
             fresh = "pending"
-            reason = f"effective_at {eff.isoformat()} is future ({(eff - today).days}d) — cite as announced"
+            reason = f"effective_at {eff.isoformat()} is future ({(eff - today).days}d) -> cite as announced"
         elif r["status"] in _UNVERIFIED_STATUS:
             fresh = "unverified"
-            reason = f"status {r['status']} — do not hard-code downstream"
+            reason = f"status {r['status']} -> do not hard-code downstream"
         elif age >= r["ttl_days"]:
             fresh = "stale"
-            reason = f"age {age}d >= ttl {r['ttl_days']}d — re-verify"
+            reason = f"age {age}d >= ttl {r['ttl_days']}d -> re-verify"
         else:
             fresh = "fresh"
             reason = f"age {age}d < ttl {r['ttl_days']}d"
@@ -111,8 +126,15 @@ def registry_check(path=DEFAULT_REGISTRY, today=None):
 
 
 if __name__ == "__main__":  # pragma: no cover
+    import sys
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")  # Windows cp949 consoles choke on non-ASCII otherwise
+    except Exception:  # noqa: BLE001
+        pass
     recs, iss = load_registry()
+    status_by_id = {r["id"]: r["status"] for r in recs}
     for e in evaluate(recs):
-        print(f"{e['freshness']:10s} {e['id']:26s} {e['reason']}")
+        # show status alongside freshness so a `dead` tool isn't misread as usable just because it's `fresh`
+        print(f"{e['freshness']:10s} status={status_by_id.get(e['id'],'?'):18s} {e['id']:26s} {e['reason']}")
     for i in iss:
         print("ISSUE:", i)

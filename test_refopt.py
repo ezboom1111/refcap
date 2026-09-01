@@ -85,9 +85,9 @@ class UserAgentMatching(unittest.TestCase):
         r = R.resolve_optout("https://x.com/x", fetch_text(robots), user_agent="GoodBot/2.0")
         self.assertEqual(r["status"], R.ALLOWED)
 
-    def test_most_specific_group_wins(self):
-        robots = "User-agent: *\nAllow: /\n\nUser-agent: Goo\nDisallow: /x\n"
-        # product token 'goodbot' startswith 'goo' -> matches the specific group
+    def test_exact_token_group_applies(self):
+        # RFC 9309: exact case-insensitive product-token match (NOT prefix). 'GoodBot' group applies.
+        robots = "User-agent: *\nAllow: /\n\nUser-agent: GoodBot\nDisallow: /x\n"
         r = R.resolve_optout("https://x.com/x", fetch_text(robots), user_agent="GoodBot/1.0")
         self.assertEqual(r["status"], R.DISALLOWED)
 
@@ -124,6 +124,48 @@ class Conditional(unittest.TestCase):
         r = R.resolve_optout("https://x.com/p", fetch_text("User-agent: *\nAllow: /\n"),
                              page_html='<a href="/llms.txt">llms.txt</a>')
         self.assertEqual(r["status"], R.ALLOWED)
+
+
+class StrictContract(unittest.TestCase):
+    """Codex 3rd review: false-allow edges around the hotfixes. These pin them shut."""
+    def test_json_content_type_is_unknown(self):
+        f = fetch_text('{"login":true}', status=200, content_type="application/json")
+        self.assertEqual(R.resolve_optout("https://x.com/p", f)["status"], R.UNKNOWN)
+
+    def test_empty_content_type_is_unknown(self):
+        f = fetch_text("<html>login</html>", status=200, content_type="")
+        self.assertEqual(R.resolve_optout("https://x.com/p", f)["status"], R.UNKNOWN)
+
+    def test_charset_plaintext_still_ok(self):
+        f = fetch_text("User-agent: *\nAllow: /\n", content_type="text/plain; charset=utf-8")
+        self.assertEqual(R.resolve_optout("https://x.com/p", f)["status"], R.ALLOWED)
+
+    def test_prefix_ua_does_not_false_match(self):
+        # 'Good' group must NOT catch product token 'goodbot' (v2 prefix bug).
+        robots = "User-agent: *\nAllow: /\n\nUser-agent: Good\nDisallow: /x\n"
+        r = R.resolve_optout("https://x.com/x", fetch_text(robots), user_agent="GoodBot/1.0")
+        self.assertEqual(r["status"], R.ALLOWED)
+
+    def test_embedded_ua_token_matches(self):
+        robots = "User-agent: *\nAllow: /\n\nUser-agent: GoodBot\nDisallow: /x\n"
+        r = R.resolve_optout("https://x.com/x", fetch_text(robots),
+                             user_agent="Mozilla/5.0 (compatible; GoodBot/1.0)")
+        self.assertEqual(r["status"], R.DISALLOWED)
+
+    def test_duplicate_ua_groups_merge(self):
+        robots = "User-agent: GoodBot\nDisallow: /a\n\nUser-agent: GoodBot\nDisallow: /b\n\nUser-agent: *\nAllow: /\n"
+        self.assertEqual(R.resolve_optout("https://x.com/a", fetch_text(robots), user_agent="GoodBot")["status"], R.DISALLOWED)
+        self.assertEqual(R.resolve_optout("https://x.com/b", fetch_text(robots), user_agent="GoodBot")["status"], R.DISALLOWED)
+
+    def test_duplicate_meta_noai_not_hidden_by_later_meta(self):
+        html = '<meta name="robots" content="noai"><meta name="robots" content="index">'
+        self.assertIn("noai", R.scan_noai(html))
+
+    def test_hostile_page_headers_do_not_crash(self):
+        class Boom:
+            def items(self): raise RuntimeError("nope")
+        r = R.resolve_optout("https://x.com/p", fetch_text("User-agent: *\nAllow: /\n"), page_headers=Boom())
+        self.assertIn(r["status"], (R.ALLOWED, R.CONDITIONAL))  # resolved, not raised
 
 
 class Misc(unittest.TestCase):

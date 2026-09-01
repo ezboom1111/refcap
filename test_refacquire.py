@@ -112,6 +112,48 @@ class ValidateGate(unittest.TestCase):
         self.assertEqual(r.evidence_state, "ok")
 
 
+class TotalContract(unittest.TestCase):
+    """Codex 3rd review: the facade had fail-open holes. These pin them shut."""
+    def _robots_ok(self):
+        return robots("User-agent: *\nAllow: /\n")
+
+    def test_fetch_exception_is_fetch_error_not_raise(self):
+        def boom(u): raise RuntimeError("net down")
+        r = A.acquire("https://x.com/p", fetch_robots=self._robots_ok(), fetch_page=boom,
+                      parser=lambda b: GOOD_ROWS, schema=SCHEMA)
+        self.assertEqual(r.evidence_state, "fetch_error")
+        self.assertFalse(r.ok)
+
+    def test_parser_exception_is_parse_error_not_raise(self):
+        def boom(b): raise ValueError("bad html")
+        r = A.acquire("https://x.com/p", fetch_robots=self._robots_ok(),
+                      fetch_page=lambda u: A.page_response("<html>x</html>"), parser=boom,
+                      schema=SCHEMA, selector_hit=True)
+        self.assertEqual(r.evidence_state, "parse_error")
+        self.assertFalse(r.ok)
+
+    def test_degenerate_fetch_object_is_fetch_invalid(self):
+        r = A.acquire("https://x.com/p", fetch_robots=self._robots_ok(),
+                      fetch_page=lambda u: object(), parser=lambda b: GOOD_ROWS, schema=SCHEMA)
+        self.assertEqual(r.evidence_state, "fetch_invalid")
+        self.assertFalse(r.ok)
+
+    def test_no_schema_is_ok_unvalidated_not_plain_ok(self):
+        r = A.acquire("https://x.com/p", fetch_robots=self._robots_ok(),
+                      fetch_page=lambda u: A.page_response("<html>x</html>"), parser=lambda b: GOOD_ROWS,
+                      selector_hit=True)  # schema omitted
+        self.assertEqual(r.evidence_state, "ok_unvalidated")
+
+    def test_suspect_softblock_not_silently_promoted(self):
+        # a marker on a large body with unknown selector = suspect; must NOT become clean ok
+        big = "access denied " + ("x" * 5000)
+        r = A.acquire("https://x.com/p", fetch_robots=self._robots_ok(),
+                      fetch_page=lambda u: A.page_response(big), parser=lambda b: GOOD_ROWS,
+                      schema=SCHEMA, selector_hit=None)
+        self.assertEqual(r.evidence_state, "ok_suspect")
+        self.assertFalse(r.ok)
+
+
 class RegistryHook(unittest.TestCase):
     def test_registry_warnings_surface_but_do_not_block(self):
         r = A.acquire("https://x.com/p", fetch_robots=robots("User-agent: *\nAllow: /\n"),

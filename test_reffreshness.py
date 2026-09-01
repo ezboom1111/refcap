@@ -65,6 +65,37 @@ class Load(unittest.TestCase):
         self.assertEqual(iss, [])
 
 
+class StrictLoad(unittest.TestCase):
+    """Codex 3rd review: loader crashed on some corruption and clean-loaded bad field types."""
+    def test_top_level_list_does_not_crash(self):
+        d = tempfile.mkdtemp(); p = os.path.join(d, "r.json")
+        open(p, "w").write("[1,2,3]")
+        recs, iss = F.load_registry(p)
+        self.assertEqual(recs, [])
+        self.assertTrue(any("root must be an object" in i for i in iss))
+
+    def test_list_id_does_not_crash(self):
+        recs, iss = F.load_registry(_reg([_rec(id=["a", "b"])]))
+        self.assertEqual(recs, [])
+        self.assertTrue(any("id must be a non-empty string" in i for i in iss))
+
+    def test_bool_ttl_rejected(self):
+        recs, iss = F.load_registry(_reg([_rec(id="a", ttl_days=True)]))
+        self.assertTrue(any("ttl_days" in i for i in iss))
+
+    def test_empty_source_refs_rejected(self):
+        recs, iss = F.load_registry(_reg([_rec(id="a", source_refs=[])]))
+        self.assertTrue(any("source_refs" in i for i in iss))
+
+    def test_nonstring_claim_rejected(self):
+        recs, iss = F.load_registry(_reg([_rec(id="a", claim=9)]))
+        self.assertTrue(any("claim" in i for i in iss))
+
+    def test_future_observed_is_corrupt(self):
+        e = F.evaluate([_rec(observed_at="2030-01-01")], today=TODAY)[0]
+        self.assertEqual(e["freshness"], "corrupt")
+
+
 class Evaluate(unittest.TestCase):
     def test_fresh_within_ttl(self):
         e = F.evaluate([_rec(observed_at="2026-08-20", ttl_days=30)], today=TODAY)[0]

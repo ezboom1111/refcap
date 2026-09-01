@@ -43,6 +43,25 @@ class SoftBlock(unittest.TestCase):
         r = G.detect_softblock("<html>forbidden page " + BIG + "</html>", status=403, selector_hit=None)
         self.assertEqual(r["verdict"], "suspect"); self.assertFalse(r["blocked"])
 
+    def test_markerless_403_selector_false_is_suspect_not_blocked(self):
+        # Codex 3rd: a markerless 403 (permission error) must not be conflated with an anti-bot wall.
+        r = G.detect_softblock("<html>forbidden " + BIG + "</html>", status=403, selector_hit=False)
+        self.assertEqual(r["verdict"], "suspect"); self.assertFalse(r["blocked"])
+
+    def test_tiny_challenge_blocks_even_if_selector_hit(self):
+        # Codex 3rd: a 29-byte "Just a moment" must not be rescued by a spurious selector hit.
+        r = G.detect_softblock("Just a moment...", status=200, selector_hit=True)
+        self.assertTrue(r["blocked"]); self.assertEqual(r["verdict"], "blocked")
+
+    def test_large_article_with_marker_and_hit_still_ok(self):
+        # ...but a real large article that mentions a marker phrase, with a genuine hit, stays ok.
+        r = G.detect_softblock("<article>access denied is discussed " + BIG + "</article>", selector_hit=True)
+        self.assertEqual(r["verdict"], "ok"); self.assertFalse(r["blocked"])
+
+    def test_bad_tiny_body_type_does_not_crash(self):
+        r = G.detect_softblock("<p>hi</p>", tiny_body="notint", selector_hit=True)
+        self.assertEqual(r["verdict"], "ok")
+
     def test_small_legit_page_with_hit_is_ok(self):
         r = G.detect_softblock("<ul><li>one</li></ul>", selector_hit=True)
         self.assertFalse(r["blocked"]); self.assertEqual(r["verdict"], "ok")
@@ -122,6 +141,18 @@ class ValueValidation(unittest.TestCase):
     def test_malformed_rule_does_not_crash(self):
         issues = G.validate_values([{"n": "a"}], {"n": {"min": "notnumber", "type": "int"}})
         self.assertIsInstance(issues, list)   # never raises
+
+    def test_non_dict_schema_is_issue_not_crash(self):
+        issues = G.validate_values([{"n": "a"}], ["not", "a", "dict"])
+        self.assertTrue(any("schema must be a dict" in i for i in issues))
+
+    def test_non_list_rows_is_issue_not_crash(self):
+        issues = G.validate_values("notalist", {"n": {}})
+        self.assertTrue(any("rows must be a list" in i for i in issues))
+
+    def test_string_min_rows_does_not_crash(self):
+        issues = G.validate_values([{"n": "a"}], {"n": {}}, min_rows="5")
+        self.assertIsInstance(issues, list)   # string min_rows ignored, no TypeError
 
     def test_empty_rows(self):
         self.assertEqual(G.validate_values([], {"x": {}}), ["no rows to validate"])

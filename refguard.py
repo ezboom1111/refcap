@@ -47,6 +47,8 @@ def detect_softblock(html="", status=200, cookies=None, selector_hit=None, tiny_
                                         if isinstance(html, (bytes, bytearray)) else str(html))
     except Exception:  # noqa: BLE001
         html = ""
+    if not isinstance(tiny_body, int) or isinstance(tiny_body, bool):
+        tiny_body = _TINY_BODY   # hostile/omitted tiny_body must not crash or disable the check
     low = html.lower()
     body_len = len(html)
     signals = []
@@ -83,13 +85,16 @@ def detect_softblock(html="", status=200, cookies=None, selector_hit=None, tiny_
     elif is_http_err and status >= 500:
         verdict, blocked = "http_error", False
     elif is_http_err and status == 403:
-        verdict, blocked = ("blocked", True) if (marker or selector_hit is False) else ("suspect", False)
+        # a markerless 403 is an ambiguous permission error, NOT necessarily an anti-bot wall (suspect).
+        verdict, blocked = ("blocked", True) if marker else ("suspect", False)
     elif is_http_err:  # other 4xx
         verdict, blocked = "http_error", False
+    elif marker and tiny:
+        verdict, blocked = "blocked", True                # tiny challenge shell: block even if a selector spuriously "hit"
     elif selector_hit is True:
-        verdict, blocked = "ok", False                    # content extracted -> marker (if any) is content
-    elif marker and (tiny or selector_hit is False):
-        verdict, blocked = "blocked", True                # marker on a shell / no content -> real wall
+        verdict, blocked = "ok", False                    # large body + content extracted -> marker (if any) is content
+    elif marker and selector_hit is False:
+        verdict, blocked = "blocked", True                # marker + no content -> real wall
     elif marker:
         verdict, blocked = "suspect", False               # marker on a normal-size body, content unknown
     elif js_wall:
@@ -118,10 +123,14 @@ def validate_values(rows, schema, min_rows=None):
     min_rows: table-level minimum row count (cardinality guard).
     """
     issues = []
+    if not isinstance(rows, list):
+        return [f"rows must be a list, got {type(rows).__name__}"]
     if not rows:
         return ["no rows to validate"]
+    if schema is not None and not isinstance(schema, dict):
+        return [f"schema must be a dict, got {type(schema).__name__}"]
     n = len(rows)
-    if min_rows is not None and n < min_rows:
+    if isinstance(min_rows, int) and not isinstance(min_rows, bool) and n < min_rows:
         issues.append(f"[_table] only {n} rows < min_rows {min_rows}")
 
     for field, rule in (schema or {}).items():

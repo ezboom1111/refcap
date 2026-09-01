@@ -34,6 +34,13 @@ def text_response(text, status=200, content_type="text/plain"):
     return RobotsResponse(status=status, content_type=content_type, text=text)
 
 
+def _is_plaintext_ct(content_type):
+    """robots.txt MUST be served as text/plain (RFC 9309 §2.3). Empty/HTML/JSON/other -> NOT robots.
+    An unreadable/absent content-type is treated as NOT plaintext -> unknown (fail-visible)."""
+    ct = (content_type or "").split(";", 1)[0].strip().lower()
+    return ct in ("text/plain", "text/x-robots")
+
+
 _NOAI_TOKENS = ("noai", "noimageai", "noml")
 
 
@@ -104,30 +111,36 @@ def parse_robots(text, user_agent="*"):
     }
 
 
-def _product_token(user_agent):
-    """RFC 9309 product token: text before '/' or whitespace, lowercased."""
-    return re.split(r"[/\s]", (user_agent or "").strip(), 1)[0].lower()
+def _product_tokens(user_agent):
+    """All product tokens in the identification UA, lowercased. RFC 9309: a robots group's user-agent
+    value must EXACTLY (case-insensitive) equal one of the crawler's product tokens (not a prefix).
+    'Mozilla/5.0 (compatible; GoodBot/1.0)' -> {mozilla, goodbot}."""
+    toks = set()
+    for chunk in re.split(r"[\s();,]+", (user_agent or "").strip()):
+        if not chunk:
+            continue
+        toks.add(chunk.split("/", 1)[0].lower())
+    return toks
 
 
 def _match_group(groups, user_agent):
-    """Most-specific matching group: a group agent token that is a case-insensitive prefix of the
-    crawler product token wins by longest token; else the '*' group; else None."""
-    product = _product_token(user_agent)
-    ua_full = (user_agent or "").lower()
-    best = None  # (specificity, group)
-    star = None
-    for g in groups:
-        for tok in g["agents"]:
-            if tok == "*":
-                if star is None:
-                    star = g
-                continue
-            if product == tok or product.startswith(tok) or ua_full.startswith(tok):
-                if best is None or len(tok) > best[0]:
-                    best = (len(tok), g)
-    if best is not None:
-        return best[1]
-    return star
+    """RFC 9309 §2.2.1: exact case-insensitive product-token match; ALL groups for that token merge;
+    else the merged '*' group; else None. No prefix heuristic (which false-matched Good->GoodBot)."""
+    tokens = _product_tokens(user_agent)
+
+    def _merge(gs):
+        rules, cd = [], None
+        for g in gs:
+            rules.extend(g["rules"])
+            if cd is None and g["crawl_delay"] is not None:
+                cd = g["crawl_delay"]
+        return {"agents": ["<merged>"], "rules": rules, "crawl_delay": cd}
+
+    specific = [g for g in groups if any(t in tokens for t in g["agents"] if t != "*")]
+    if specific:
+        return _merge(specific)
+    star = [g for g in groups if "*" in g["agents"]]
+    return _merge(star) if star else None
 
 
 def _robots_match(pattern, path):
@@ -156,14 +169,18 @@ def _path_allowed(rules, path):
 def scan_noai(html="", headers=None):
     """Return {tdmrep, noai...} signals from meta tags (order/casing independent) or headers."""
     signals = set()
-    headers = headers or {}
-    metas = dict(_meta_pairs(html))
-    if metas.get("tdm-reservation", "").strip() == "1":
+    pairs = _meta_pairs(html)  # list of (name, content) — duplicates PRESERVED (a later meta must not hide noai)
+    if any(name == "tdm-reservation" and content.strip() == "1" for name, content in pairs):
         signals.add("tdmrep")
-    hdr_lower = {str(k).lower(): str(v).lower() for k, v in headers.items()}
+    hdr_lower = {}
+    try:
+        for k, v in (headers or {}).items():
+            hdr_lower[str(k).lower()] = str(v).lower()
+    except Exception:  # noqa: BLE001 - a hostile header mapping must not crash opt-out resolution
+        signals.add("header-scan-error")
     if hdr_lower.get("tdm-reservation", "").strip() == "1":
         signals.add("tdmrep")
-    robots_content = " ".join(v for k, v in metas.items() if k in ("robots", "x-robots-tag"))
+    robots_content = " ".join(content for name, content in pairs if name in ("robots", "x-robots-tag"))
     xrobots = hdr_lower.get("x-robots-tag", "")
     joined = robots_content + " " + xrobots
     for tok in _NOAI_TOKENS:
@@ -208,8 +225,8 @@ def resolve_optout(url, fetch, user_agent="*", page_html="", page_headers=None):
             reasons.append("robots.txt 404 -> allow-all")
         elif resp.status in (401, 403) or resp.status >= 500 or resp.status != 200:
             reasons.append(f"robots.txt status {resp.status} -> undecidable")
-        elif "html" in (resp.content_type or "").lower():
-            reasons.append(f"robots.txt content-type '{resp.content_type}' is not text/plain -> not robots (likely a wall/login page)")
+        elif not _is_plaintext_ct(resp.content_type):
+            reasons.append(f"robots.txt content-type '{resp.content_type}' is not text/plain -> not robots (login/JSON/wall page)")
         else:
             parsed = parse_robots(resp.text, user_agent)
             license_urls = list(parsed["license_urls"])
